@@ -5,5 +5,6 @@ model_path: Qwen/Qwen2.5-7B-Instruct
 precision: fp16
 kv_cache_quant: false
 max_num_seqs: 256
+tensor_parallel_size: 2   # span both Kaggle T4s; FP16 7B OOMs on a single T4
 params_b: 7.0
-gpu_hourly_usd: 0.40   # reference price; state your source in the README
+gpu_hourly_usd: 0.40      # reference price; state your source in the README

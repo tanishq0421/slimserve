@@ -27,13 +27,16 @@ def main() -> None:
         precision=Precision(cfg.get("precision", "fp16")),
         kv_cache_quant=cfg.get("kv_cache_quant", False),
         max_num_seqs=cfg.get("max_num_seqs", 256),
+        # TP=2 spans both Kaggle T4s — required for FP16 7B, else it OOMs.
+        extra={"tensor_parallel_size": cfg.get("tensor_parallel_size", 1)},
     )
-    benchmark_config(
+    result = benchmark_config(
         config_name=cfg["config_name"],
         engine_cfg=engine_cfg,
         params_b=cfg["params_b"],
         gpu_hourly_usd=cfg["gpu_hourly_usd"],
     )
+    print(result)
 
 
 if __name__ == "__main__":

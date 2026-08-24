@@ -25,18 +25,23 @@ def benchmark_config(
     engine_cfg: EngineConfig,
     params_b: float,
     gpu_hourly_usd: float,
-    evaluator_name: str = "bfcl",
-) -> None:
-    """Run one config and append its row to the hero table."""
+    evaluator_name: str | None = None,
+) -> "BenchmarkResult":
+    """Run one config and append its row to the hero table.
+
+    ``evaluator_name`` is None in Phase 1 (Week 1 uses the built-in validity
+    stand-in); pass "bfcl" from Week 2 once the harness is wired.
+    """
     engine = build("engine", engine_cfg.name, engine_cfg)
-    evaluator = build("evaluator", evaluator_name)
+    evaluator = build("evaluator", evaluator_name) if evaluator_name else None
     runner = BenchmarkRunner(gpu_hourly_usd=gpu_hourly_usd)
 
     result = runner.run(
         config_name=config_name,
         engine=engine,
-        evaluator=evaluator,
         params_b=params_b,
         precision=engine_cfg.precision.value,
+        evaluator=evaluator,
     )
     ResultsStore().append(result)
+    return result

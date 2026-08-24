@@ -1,0 +1,9 @@
+# Phase 1, Week 1 — the FP16 baseline row.
+config_name: teacher_fp16
+engine: vllm
+model_path: Qwen/Qwen2.5-7B-Instruct
+precision: fp16
+kv_cache_quant: false
+max_num_seqs: 256
+params_b: 7.0
+gpu_hourly_usd: 0.40   # reference price; state your source in the README

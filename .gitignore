@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Data / model artifacts (keep the repo light)
+*.safetensors
+*.bin
+*.gguf
+checkpoints/
+data/
+
+# Benchmark outputs are committed selectively; ignore scratch plots
+results/charts/*.tmp
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

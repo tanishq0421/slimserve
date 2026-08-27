@@ -41,6 +41,8 @@ def main() -> None:
         engine_cfg=engine_cfg,
         params_b=cfg["params_b"],
         gpu_hourly_usd=cfg["gpu_hourly_usd"],
+        evaluator_name=cfg.get("evaluator"),          # e.g. "toolcall" for real accuracy
+        evaluator_samples=cfg.get("eval_samples", 200),
     )
     print(result)
 

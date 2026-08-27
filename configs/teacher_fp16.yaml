@@ -10,3 +10,5 @@ gpu_memory_utilization: 0.85  # leave headroom on 16GB T4s (default 0.92 OOMs at
 max_model_len: 8192           # our tool-calling prompts are short; caps KV-cache reservation
 params_b: 7.0
 gpu_hourly_usd: 0.40          # reference price; state your source in the README
+evaluator: toolcall           # real tool-calling accuracy on xLAM held-out set
+eval_samples: 200

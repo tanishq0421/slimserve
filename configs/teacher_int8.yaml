@@ -11,3 +11,5 @@ gpu_memory_utilization: 0.90
 max_model_len: 8192
 params_b: 7.0
 gpu_hourly_usd: 0.20            # ONE T4 = half the 2xT4 baseline price ($0.40) -> fair $/1M
+evaluator: toolcall            # real tool-calling accuracy on xLAM held-out set
+eval_samples: 200

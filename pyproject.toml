@@ -12,6 +12,7 @@ dependencies = [
 
 [project.optional-dependencies]
 serve = ["vllm", "autoawq"]
+eval = ["datasets"]
 train = ["transformers", "peft", "trl", "bitsandbytes", "datasets"]
 dev = ["pytest", "ruff"]
 

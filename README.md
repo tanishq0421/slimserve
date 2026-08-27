@@ -16,12 +16,19 @@ tool-calling accuracy** across every configuration.
 Live table in [`results/benchmarks.csv`](results/benchmarks.csv); per-run notes in
 [`results/logs/`](results/logs/).
 
-| config | params | precision | tool_acc\* | tok/s | TTFT (ms) | p99 (ms) | VRAM (MB) | $/1M tok |
-|---|---|---|---|---|---|---|---|---|
-| teacher_fp16 | 7B | fp16 | 1.00 | 728.7 | 47.8 | 1416 | 27914 | **0.1525** |
+| config | params | precision | GPUs | tool_acc\* | tok/s | TTFT (ms) | p99 (ms) | VRAM (MB) | $/1M tok |
+|---|---|---|---|---|---|---|---|---|---|
+| teacher_fp16 | 7B | fp16 | 2× T4 | 1.00 | 728.7 | 47.8 | 1416 | 27914 | 0.1525 |
+| teacher_int8 | 7B | int8 (GPTQ) | 1× T4 | 1.00 | 565.3 | 42.2 | 1439 | 12300 | 0.0983 |
+| teacher_int4_awq | 7B | int4 (AWQ) | 1× T4 | 1.00 | 596.8 | 34.3 | 1121 | 12328 | **0.0931** |
 
 <sub>\*Week-1 tool-call well-formedness stand-in; real BFCL accuracy lands in Week 2.
-Measured on Kaggle 2× T4, tensor-parallel. `$/1M` uses a $0.40/hr reference for the 2× T4 pair.</sub>
+Measured on Kaggle T4s. `$/1M` uses a $0.20/hr-per-T4 reference (so FP16's 2× T4 = $0.40/hr,
+the single-GPU quantized runs = $0.20/hr).</sub>
+
+**Takeaways:** INT4 (AWQ) serves the same 7B at **~1.6× lower cost** and **better latency**
+than FP16, on **half the hardware** (one 16 GB T4 vs two), with no drop in tool-call validity.
+FP16 7B does not fit on a single T4 — quantization is what unlocks single-GPU serving.
 
 ![Phase 1 Week 1 benchmark on Kaggle](docs/images/phase1_week1_benchmark.png)
 

@@ -126,7 +126,8 @@ class DistillStrategy(ABC):
 class Evaluator(ABC):
     """Scores an engine on the tool-calling task.
 
-    Implementations: BFCLEvaluator, ToolBenchEvaluator.
+    Implementations: ToolCallAccuracyEvaluator (xLAM held-out set). A BFCL-harness
+    evaluator could be added here later without touching anything else.
     """
 
     @abstractmethod

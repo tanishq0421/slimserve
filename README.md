@@ -29,6 +29,8 @@ the single-GPU quantized runs = $0.20/hr).</sub>
 **Takeaways:** INT4 (AWQ) serves the same 7B at **~1.6× lower cost** and **better latency**
 than FP16, on **half the hardware** (one 16 GB T4 vs two), with no drop in tool-call validity.
 FP16 7B does not fit on a single T4 — quantization is what unlocks single-GPU serving.
+Weights shrink from **~14 GiB (FP16) → 8.3 (INT8) → 5.3 (INT4)**; on a fixed GPU that freed
+memory becomes KV cache, giving INT4 **~2.5× more concurrency headroom** than INT8.
 
 Full write-up, including what these numbers *don't* prove, in
 [`docs/FINDINGS.md`](docs/FINDINGS.md).

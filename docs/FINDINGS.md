@@ -32,12 +32,20 @@ is the real saving — more than any throughput difference.
 
 ## Things that surprised me
 
-- **INT8 and INT4 use almost the same VRAM (~12.3 GB each).** That threw me until I
-  looked closer: vLLM grabs ~90% of the GPU and fills whatever the weights don't use
-  with KV cache. So lighter weights don't shrink the footprint — they leave more room
-  for KV cache and more concurrent requests. Worth measuring the weights-only memory
-  separately later to show the true reduction.
+- **INT8 and INT4 report almost the same total VRAM (~12.3 GB each).** That threw me
+  until I read the startup logs properly. vLLM grabs ~90% of the GPU and fills whatever
+  the weights don't use with KV cache, so the *total* looks the same — but the split is
+  very different. The weights themselves drop a lot: FP16 ~14.2 GiB → INT8 8.3 GiB →
+  INT4 5.3 GiB (from the "Model loading took X GiB" line, so this is real, not
+  estimated). All that freed memory turns into KV cache: INT4 gets 5.47 GiB (102k
+  tokens, ~12.5× concurrency) vs INT8's 2.51 GiB (47k tokens, ~5.7×). So on a fixed
+  GPU, the real payoff of going lower-precision isn't a smaller footprint — it's a lot
+  more room for concurrent requests.
 - **INT4 beat INT8 on latency.** Less data to move per weight, most likely.
+- **Marlin kernels ran fine on the T4.** I'd assumed the Marlin quantization kernels
+  needed an Ampere GPU, but the logs show vLLM picking `MarlinLinearKernel` for both
+  AWQ and GPTQ on the T4 and running. Good reminder to check what actually happened
+  instead of trusting an assumption.
 
 ## What this does NOT prove (being honest with myself)
 

@@ -65,6 +65,11 @@ class VLLMEngine(InferenceEngine):
         }.get(cfg.precision)
         kv_cache_dtype = "fp8" if cfg.kv_cache_quant else "auto"
         tp = int(cfg.extra.get("tensor_parallel_size", 1))
+        # Memory knobs (matter on 16GB T4s): leave headroom for transient warmup
+        # allocations, and cap context so the KV cache reservation stays modest.
+        gpu_mem_util = float(cfg.extra.get("gpu_memory_utilization", 0.90))
+        max_model_len = cfg.extra.get("max_model_len")           # None -> model default
+        enforce_eager = bool(cfg.extra.get("enforce_eager", False))
 
         self._tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
         self._llm = LLM(
@@ -74,6 +79,9 @@ class VLLMEngine(InferenceEngine):
             quantization=quantization,
             kv_cache_dtype=kv_cache_dtype,
             max_num_seqs=cfg.max_num_seqs,
+            gpu_memory_utilization=gpu_mem_util,
+            max_model_len=max_model_len,
+            enforce_eager=enforce_eager,
             trust_remote_code=True,
         )
 

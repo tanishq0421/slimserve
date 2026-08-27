@@ -1,0 +1,13 @@
+# Phase 1, Week 2 — INT8 (GPTQ) row. Fits a SINGLE T4 (no tensor parallelism).
+config_name: teacher_int8
+engine: vllm
+model_path: Qwen/Qwen2.5-7B-Instruct-GPTQ-Int8
+precision: int8
+quantization: gptq              # plain gptq kernel (Marlin needs Ampere+; T4 is Turing)
+kv_cache_quant: false
+max_num_seqs: 256
+tensor_parallel_size: 1         # one T4 is enough once weights are INT8 (~8GB)
+gpu_memory_utilization: 0.90
+max_model_len: 8192
+params_b: 7.0
+gpu_hourly_usd: 0.20            # ONE T4 = half the 2xT4 baseline price ($0.40) -> fair $/1M

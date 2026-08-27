@@ -33,6 +33,7 @@ def main() -> None:
             "gpu_memory_utilization": cfg.get("gpu_memory_utilization", 0.90),
             "max_model_len": cfg.get("max_model_len"),
             "enforce_eager": cfg.get("enforce_eager", False),
+            "quantization": cfg.get("quantization"),
         },
     )
     result = benchmark_config(

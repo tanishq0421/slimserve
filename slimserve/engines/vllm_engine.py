@@ -57,12 +57,13 @@ class VLLMEngine(InferenceEngine):
 
         cfg = self.config
         dtype = "float16" if cfg.precision is Precision.FP16 else "auto"
-        # INT4/INT8 expect an already-quantized checkpoint (Week 2); FP16 baseline
-        # is quantization=None.
-        quantization = {
-            Precision.INT4: "awq",
-            Precision.INT8: "compressed-tensors",
-        }.get(cfg.precision)
+        # Quantized configs point model_path at an already-quantized checkpoint and
+        # name the method explicitly (e.g. "awq", "gptq"). On T4 (Turing) use the
+        # plain awq/gptq kernels — the *_marlin kernels need Ampere+. FP16 baseline
+        # leaves this None.
+        quantization = cfg.extra.get("quantization")
+        if quantization is None:
+            quantization = {Precision.INT4: "awq", Precision.INT8: "gptq"}.get(cfg.precision)
         kv_cache_dtype = "fp8" if cfg.kv_cache_quant else "auto"
         tp = int(cfg.extra.get("tensor_parallel_size", 1))
         # Memory knobs (matter on 16GB T4s): leave headroom for transient warmup

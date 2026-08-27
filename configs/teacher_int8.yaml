@@ -3,7 +3,7 @@ config_name: teacher_int8
 engine: vllm
 model_path: Qwen/Qwen2.5-7B-Instruct-GPTQ-Int8
 precision: int8
-quantization: gptq              # plain gptq kernel (Marlin needs Ampere+; T4 is Turing)
+quantization: gptq              # vLLM auto-picks the kernel (Marlin ran fine on the T4)
 kv_cache_quant: false
 max_num_seqs: 256
 tensor_parallel_size: 1         # one T4 is enough once weights are INT8 (~8GB)

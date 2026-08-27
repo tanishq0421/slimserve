@@ -11,6 +11,20 @@ tool-calling accuracy** across every configuration.
 > **Headline target:** distilled INT4 SLM at **~6–8× lower cost**, **≥~90–95% of
 > teacher tool-calling accuracy**.
 
+## Results so far
+
+Live table in [`results/benchmarks.csv`](results/benchmarks.csv); per-run notes in
+[`results/logs/`](results/logs/).
+
+| config | params | precision | tool_acc\* | tok/s | TTFT (ms) | p99 (ms) | VRAM (MB) | $/1M tok |
+|---|---|---|---|---|---|---|---|---|
+| teacher_fp16 | 7B | fp16 | 1.00 | 728.7 | 47.8 | 1416 | 27914 | **0.1525** |
+
+<sub>\*Week-1 tool-call well-formedness stand-in; real BFCL accuracy lands in Week 2.
+Measured on Kaggle 2× T4, tensor-parallel. `$/1M` uses a $0.40/hr reference for the 2× T4 pair.</sub>
+
+![Phase 1 Week 1 benchmark on Kaggle](docs/images/phase1_week1_benchmark.png)
+
 ## The story in three phases
 
 1. **Serve & benchmark** existing tools — vLLM + INT8/INT4/FP8 quantization + KV-cache

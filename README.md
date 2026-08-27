@@ -33,7 +33,7 @@ Weights shrink from **~14 GiB (FP16) → 8.3 (INT8) → 5.3 (INT4)**; on a fixed
 memory becomes KV cache, giving INT4 **~2.5× more concurrency headroom** than INT8.
 
 Full write-up, including what these numbers *don't* prove, in
-[`docs/FINDINGS.md`](docs/FINDINGS.md).
+[`results/FINDINGS.md`](results/FINDINGS.md).
 
 ![Phase 1 Week 1 benchmark on Kaggle](docs/images/phase1_week1_benchmark.png)
 

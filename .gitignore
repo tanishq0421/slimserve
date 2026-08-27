@@ -15,6 +15,11 @@ data/
 # Benchmark outputs are committed selectively; ignore scratch plots
 results/charts/*.tmp
 
+# Secrets — never commit tokens/keys
+.env
+*.env
+.env.*
+
 # OS / editor
 .DS_Store
 .idea/

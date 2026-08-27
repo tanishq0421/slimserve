@@ -30,6 +30,9 @@ the single-GPU quantized runs = $0.20/hr).</sub>
 than FP16, on **half the hardware** (one 16 GB T4 vs two), with no drop in tool-call validity.
 FP16 7B does not fit on a single T4 — quantization is what unlocks single-GPU serving.
 
+Full write-up, including what these numbers *don't* prove, in
+[`docs/FINDINGS.md`](docs/FINDINGS.md).
+
 ![Phase 1 Week 1 benchmark on Kaggle](docs/images/phase1_week1_benchmark.png)
 
 ## The story in three phases

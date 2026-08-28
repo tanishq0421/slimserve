@@ -1,0 +1,15 @@
+# Phase 3, Step 1 — untrained 1.5B student baseline (off-the-shelf, no distillation yet).
+# Zero new code: reuses the vLLM engine + toolcall evaluator. Tells us the gap to close.
+config_name: student_1p5b_base
+engine: vllm
+model_path: Qwen/Qwen2.5-1.5B-Instruct
+precision: fp16
+kv_cache_quant: false
+max_num_seqs: 256
+tensor_parallel_size: 1        # 1.5B fits easily on a single T4
+gpu_memory_utilization: 0.90
+max_model_len: 8192
+params_b: 1.5
+gpu_hourly_usd: 0.20           # single T4
+evaluator: toolcall
+eval_samples: 200

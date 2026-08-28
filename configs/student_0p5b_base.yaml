@@ -1,0 +1,14 @@
+# Phase 3, Step 1 — untrained 0.5B student baseline (the stretch, smaller student).
+config_name: student_0p5b_base
+engine: vllm
+model_path: Qwen/Qwen2.5-0.5B-Instruct
+precision: fp16
+kv_cache_quant: false
+max_num_seqs: 256
+tensor_parallel_size: 1        # 0.5B is tiny — single T4 with lots of room
+gpu_memory_utilization: 0.90
+max_model_len: 8192
+params_b: 0.5
+gpu_hourly_usd: 0.20           # single T4
+evaluator: toolcall
+eval_samples: 200

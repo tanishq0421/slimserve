@@ -1,4 +1,4 @@
 config_name,params_b,precision,tool_acc,arg_acc,tokens_per_s,ttft_ms,p99_latency_ms,vram_mb,cost_per_1m_tokens
-teacher_fp16,7.0,fp16,1.0,1.0,728.7,47.81,1416.35,27914.0,0.1525
-teacher_int8,7.0,int8,1.0,1.0,565.28,42.16,1439.43,12300.0,0.0983
-teacher_int4_awq,7.0,int4,1.0,1.0,596.77,34.29,1121.21,12328.0,0.0931
+teacher_fp16,7.0,fp16,0.99,0.795,631.05,55.29,4655.47,27462.0,0.1761
+teacher_int8,7.0,int8,0.985,0.795,548.25,43.54,1521.81,13408.0,0.1013
+teacher_int4_awq,7.0,int4,0.99,0.78,576.6,36.62,1278.34,14422.0,0.0964

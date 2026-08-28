@@ -1,82 +1,77 @@
 # Phase 1 notes — quantizing a 7B tool-calling model
 
-Working notes, not a polished report. The point is to write down what I actually
-learned and, just as importantly, what these numbers do *not* prove.
+Working notes, not a polished report. What I actually learned, and what these
+numbers still don't prove.
 
 ## What I was trying to find out
 
 Take `Qwen2.5-7B-Instruct`, serve it three ways — full precision (FP16), INT8, and
-INT4 — and see what compression actually buys you when the job is tool/function
-calling. The number I care about most is cost per million tokens, but I also tracked
-throughput, latency, memory, and whether the model still emits valid tool calls.
+INT4 — and see what compression buys you for tool/function calling: cost, speed,
+memory, and (the important one) whether the model stays accurate.
 
 ## What the numbers said
 
-| config | precision | GPUs | tok/s | TTFT | p99 | VRAM | $/1M |
-|---|---|---|---|---|---|---|---|
-| teacher_fp16 | fp16 | 2× T4 | 728.7 | 47.8 ms | 1416 ms | 27.9 GB | 0.1525 |
-| teacher_int8 | int8 | 1× T4 | 565.3 | 42.2 ms | 1439 ms | 12.3 GB | 0.0983 |
-| teacher_int4_awq | int4 | 1× T4 | 596.8 | 34.3 ms | 1121 ms | 12.3 GB | 0.0931 |
+| config | precision | GPUs | tool_acc | arg_acc | tok/s | TTFT | p99 | VRAM | $/1M |
+|---|---|---|---|---|---|---|---|---|---|
+| teacher_fp16 | fp16 | 2× T4 | 0.990 | 0.795 | 631 | 55 ms | 4655 ms | 27.5 GB | 0.176 |
+| teacher_int8 | int8 | 1× T4 | 0.985 | 0.795 | 548 | 44 ms | 1522 ms | 13.4 GB | 0.101 |
+| teacher_int4_awq | int4 | 1× T4 | 0.990 | 0.780 | 577 | 37 ms | 1278 ms | 14.4 GB | 0.096 |
 
-Full precision only runs if I split it across both T4s — 14 GB of weights doesn't fit
-on one 16 GB card. Once I quantize, the whole thing fits on a single T4, and the cost
-per million tokens drops from about $0.15 to $0.09 — roughly 1.6× cheaper. INT4 came
-out slightly ahead of INT8 on both cost and latency, which mildly surprised me; I'd
-half-expected INT8 to be quicker.
+Two headlines:
 
-Tool-call validity stayed at 100% across all three.
+**1. Cost and hardware.** FP16 needs two T4s — 14 GB of weights won't fit on one 16 GB
+card. Quantized, it fits on one, and cost per million tokens drops from ~$0.18 to ~$0.10,
+roughly 1.8× cheaper. That halving of hardware is the real saving, more than any
+throughput difference.
 
-The most useful thing I took away: quantization isn't just "smaller files." It changes
-what hardware you need. FP16 needs two GPUs; INT4 needs one. That halving of hardware
-is the real saving — more than any throughput difference.
+**2. Quality held up — and this is the part I couldn't claim before.** On 200 held-out
+tool-calling examples, INT4 matches FP16 on tool selection (0.99 = 0.99) and is within
+about a point and a half on arguments (0.78 vs 0.795). At n=200 those gaps are inside
+the noise. So for this task, dropping to 4-bit didn't cost accuracy — the cheaper,
+faster model is just as good at the job.
 
 ## Things that surprised me
 
-- **INT8 and INT4 report almost the same total VRAM (~12.3 GB each).** That threw me
-  until I read the startup logs properly. vLLM grabs ~90% of the GPU and fills whatever
-  the weights don't use with KV cache, so the *total* looks the same — but the split is
-  very different. The weights themselves drop a lot: FP16 ~14.2 GiB → INT8 8.3 GiB →
-  INT4 5.3 GiB (from the "Model loading took X GiB" line, so this is real, not
-  estimated). All that freed memory turns into KV cache: INT4 gets 5.47 GiB (102k
-  tokens, ~12.5× concurrency) vs INT8's 2.51 GiB (47k tokens, ~5.7×). So on a fixed
-  GPU, the real payoff of going lower-precision isn't a smaller footprint — it's a lot
-  more room for concurrent requests.
-- **INT4 beat INT8 on latency.** Less data to move per weight, most likely.
-- **Marlin kernels ran fine on the T4.** I'd assumed the Marlin quantization kernels
-  needed an Ampere GPU, but the logs show vLLM picking `MarlinLinearKernel` for both
-  AWQ and GPTQ on the T4 and running. Good reminder to check what actually happened
-  instead of trusting an assumption.
+- **INT8 and INT4 report almost the same total VRAM (~13–14 GB).** vLLM grabs ~90% of
+  the GPU and fills whatever the weights don't use with KV cache, so the *total* looks
+  the same — but the split differs. Weights themselves drop a lot: FP16 ~14.2 GiB → INT8
+  8.3 GiB → INT4 5.3 GiB (straight from the "Model loading took X GiB" line). The freed
+  memory becomes KV cache: INT4 got 5.47 GiB (102k tokens, ~12.5× concurrency) vs INT8's
+  2.51 GiB (47k tokens, ~5.7×). The real payoff of lower precision on a fixed GPU is more
+  room for concurrent requests, not a smaller footprint.
+- **FP16 has the *worst* tail latency despite the most throughput.** FP16 p99 is ~4.7 s
+  vs INT4's ~1.3 s. Splitting FP16 across two T4s (tensor parallelism) makes every token
+  pay a cross-GPU communication cost, and Kaggle's T4s have no fast GPU-to-GPU link (the
+  logs disabled P2P / custom all-reduce). So TP helps batched throughput but hurts
+  single-request latency. Single-GPU INT4 sidesteps it entirely.
+- **Marlin kernels ran fine on the T4.** I'd assumed they needed Ampere; the logs show
+  vLLM picking `MarlinLinearKernel` for both AWQ and GPTQ on the T4 and running.
 
-## What this does NOT prove (being honest with myself)
+## What this still doesn't prove (being honest with myself)
 
-This is the part I don't want to oversell.
-
-1. **`tool_acc = 1.0` is not real accuracy.** Right now it only checks that the output
-   is well-formed JSON naming a tool. It does *not* check that the model picked the
-   right tool with the right arguments. So "quantization didn't hurt quality" is not
-   something I've actually shown — that needs the real BFCL benchmark, which is next.
-2. **The throughput comparison isn't fair.** FP16 ran on two GPUs, the quantized ones
-   on one. "FP16 is faster" mostly means "two GPUs beat one," not that quantization is
-   slow. The honest framing: you can't even run FP16 on one T4, so it's really
-   "two GPUs of FP16" vs "one GPU of INT4."
-3. **The cost figure is a reference price, not a bill.** I used $0.20 per T4-hour. Fine
-   for comparing rows against each other; don't read it as a real cloud cost.
-4. **The workload is tiny and synthetic** — eight hand-written prompts cycled up to 64.
-   Real traffic has longer, more varied prompts, so these throughput/latency numbers
-   are directional, not production numbers.
-5. **One run each, no repeats.** I haven't measured how much the numbers wobble.
-6. **The T4 is old (2018).** No FlashAttention 2, no native FP8. On newer hardware the
-   picture — especially throughput and FP8 KV-cache — would look different.
-7. **I used Qwen's official pre-quantized checkpoints.** So this shows I can *serve*
-   quantized models, not that I ran the quantization pipeline myself yet.
+1. **The accuracy metric is strict and narrow.** It's my own exact-match score on
+   single-tool-call examples, not the official BFCL. Exact-match under-counts arguments
+   that are correct but phrased differently, so `arg_acc` (~0.78–0.795) is a *floor*, not
+   the true number. It also doesn't test multi-tool, parallel calls, or "should not call
+   anything" cases.
+2. **Small sample, single runs.** 200 eval examples and one run per config — ±1–2 points
+   is noise. I saw this directly: FP16 throughput was 728 tok/s in an earlier run and 631
+   here, a ~13% swing. Treat single numbers as ballpark.
+3. **The cost figure is a reference price ($0.20/T4-hr), not a real bill.**
+4. **The perf workload is tiny and synthetic** — 8 prompts cycled to 64. Directional, not
+   production traffic.
+5. **The T4 is old (2018).** No FlashAttention 2, no native FP8. Newer hardware would
+   shift throughput and unlock FP8 KV-cache.
+6. **I used Qwen's official pre-quantized checkpoints.** So this shows I can *serve*
+   quantized models; running the quantization myself is a later step.
 
 ## Bottom line
 
-For a narrow task like tool calling, quantizing a 7B model to INT4 looks close to free
-money: about 1.6× cheaper to serve, better latency, and it fits on a single mid-tier
-GPU instead of two — and I couldn't find a downside in the (admittedly shallow) quality
-check.
+For tool calling, quantizing this 7B to INT4 is close to free: ~1.8× cheaper, better
+latency, half the hardware — and, now measured, no accuracy loss (INT4 ties FP16 on tool
+choice and is within noise on arguments). Both halves of the claim — cheaper *and* just as
+good — are backed by numbers, not assumed.
 
-The catch is that last clause. The whole argument rests on "quality holds up," and my
-current check is too weak to back that claim. So the next job is the real accuracy
-benchmark (BFCL) — until that's in, the cost win is only half the story.
+The honest asterisks: it's a strict, single-call, 200-example metric, one run per config,
+on old hardware, using pre-quantized checkpoints. None of that breaks the conclusion for
+this task — but it's why I'd call this strong signal, not the last word.

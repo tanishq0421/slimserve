@@ -16,21 +16,23 @@ tool-calling accuracy** across every configuration.
 Live table in [`results/benchmarks.csv`](results/benchmarks.csv); per-run notes in
 [`results/logs/`](results/logs/).
 
-| config | params | precision | GPUs | tool_acc\* | tok/s | TTFT (ms) | p99 (ms) | VRAM (MB) | $/1M tok |
-|---|---|---|---|---|---|---|---|---|---|
-| teacher_fp16 | 7B | fp16 | 2× T4 | 1.00 | 728.7 | 47.8 | 1416 | 27914 | 0.1525 |
-| teacher_int8 | 7B | int8 (GPTQ) | 1× T4 | 1.00 | 565.3 | 42.2 | 1439 | 12300 | 0.0983 |
-| teacher_int4_awq | 7B | int4 (AWQ) | 1× T4 | 1.00 | 596.8 | 34.3 | 1121 | 12328 | **0.0931** |
+| config | params | precision | GPUs | tool_acc | arg_acc | tok/s | TTFT (ms) | p99 (ms) | VRAM (MB) | $/1M tok |
+|---|---|---|---|---|---|---|---|---|---|---|
+| teacher_fp16 | 7B | fp16 | 2× T4 | 0.990 | 0.795 | 631.1 | 55.3 | 4655 | 27462 | 0.1761 |
+| teacher_int8 | 7B | int8 (GPTQ) | 1× T4 | 0.985 | 0.795 | 548.3 | 43.5 | 1522 | 13408 | 0.1013 |
+| teacher_int4_awq | 7B | int4 (AWQ) | 1× T4 | 0.990 | 0.780 | 576.6 | 36.6 | 1278 | 14422 | **0.0964** |
 
-<sub>\*Week-1 tool-call well-formedness stand-in; real BFCL accuracy lands in Week 2.
-Measured on Kaggle T4s. `$/1M` uses a $0.20/hr-per-T4 reference (so FP16's 2× T4 = $0.40/hr,
-the single-GPU quantized runs = $0.20/hr).</sub>
+<sub>Accuracy = tool-calling on 200 held-out xLAM examples: `tool_acc` = right tool,
+`arg_acc` = right tool **and** right arguments (strict exact-match, so a floor). ±1–2 pts is
+noise at n=200. Measured on Kaggle T4s; `$/1M` uses $0.20/hr-per-T4 (FP16's 2× T4 = $0.40/hr).</sub>
 
-**Takeaways:** INT4 (AWQ) serves the same 7B at **~1.6× lower cost** and **better latency**
-than FP16, on **half the hardware** (one 16 GB T4 vs two), with no drop in tool-call validity.
-FP16 7B does not fit on a single T4 — quantization is what unlocks single-GPU serving.
-Weights shrink from **~14 GiB (FP16) → 8.3 (INT8) → 5.3 (INT4)**; on a fixed GPU that freed
-memory becomes KV cache, giving INT4 **~2.5× more concurrency headroom** than INT8.
+**Takeaways:** Quantization is **essentially free for this task.** INT4 matches FP16 on tool
+selection (0.99 = 0.99) and is within noise on arguments (0.78 vs 0.795), while serving at
+**~1.8× lower cost**, **better latency**, on **half the hardware** (one 16 GB T4 vs two).
+FP16 7B doesn't fit on a single T4 — quantization is what unlocks single-GPU serving.
+Weights shrink **~14 → 8.3 → 5.3 GiB** (FP16→INT8→INT4); the freed memory becomes KV-cache
+headroom. And FP16's p99 latency is **~3.6× worse** than INT4's — tensor-parallelism across two
+T4s (no fast GPU link on Kaggle) pays a per-token communication cost that single-GPU INT4 avoids.
 
 Full write-up, including what these numbers *don't* prove, in
 [`results/FINDINGS.md`](results/FINDINGS.md).

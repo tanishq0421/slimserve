@@ -13,8 +13,10 @@ tool-calling accuracy** across every configuration.
 
 ## Results so far
 
+![Cost, memory, and accuracy across precisions](results/charts/phase1_cost_vs_quality.png)
+
 Live table in [`results/benchmarks.csv`](results/benchmarks.csv); per-run notes in
-[`results/logs/`](results/logs/).
+[`results/logs/`](results/logs/). Regenerate the chart with `python scripts/plot_results.py`.
 
 | config | params | precision | GPUs | tool_acc | arg_acc | tok/s | TTFT (ms) | p99 (ms) | VRAM (MB) | $/1M tok |
 |---|---|---|---|---|---|---|---|---|---|---|

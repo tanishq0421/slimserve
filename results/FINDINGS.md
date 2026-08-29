@@ -39,11 +39,17 @@ faster model is just as good at the job.
   memory becomes KV cache: INT4 got 5.47 GiB (102k tokens, ~12.5× concurrency) vs INT8's
   2.51 GiB (47k tokens, ~5.7×). The real payoff of lower precision on a fixed GPU is more
   room for concurrent requests, not a smaller footprint.
-- **FP16 has the *worst* tail latency despite the most throughput.** FP16 p99 is ~4.7 s
-  vs INT4's ~1.3 s. Splitting FP16 across two T4s (tensor parallelism) makes every token
-  pay a cross-GPU communication cost, and Kaggle's T4s have no fast GPU-to-GPU link (the
-  logs disabled P2P / custom all-reduce). So TP helps batched throughput but hurts
-  single-request latency. Single-GPU INT4 sidesteps it entirely.
+- **FP16 has the *worst* tail latency despite the most throughput — but it's an artifact,
+  not an FP16 cost.** FP16 p99 is ~4.7 s vs INT4's ~1.3 s. FP16 7B only ran because it was
+  split across two T4s (tensor parallelism), and TP makes every layer do an all-reduce to
+  combine the two GPUs' partial results — every layer, every token. Kaggle's T4s have no
+  fast GPU-to-GPU link (the logs disabled P2P / custom all-reduce), so that exchange is
+  slow, and it dominates the tail. The single-GPU quantized rows *are* the 7B without TP —
+  ~1.3–1.5 s p99 — so the ~3× gap is the communication tax, not full precision being slow.
+  On a single GPU big enough to hold FP16 (e.g. an A100) the penalty vanishes entirely; we
+  couldn't measure that on free Kaggle because FP16 7B doesn't fit one 16 GB T4 — which is
+  exactly why TP was needed. **Takeaway: quantization's durable wins are memory and cost;
+  the latency gap here is a two-weakly-linked-GPUs artifact.**
 - **Marlin kernels ran fine on the T4.** I'd assumed they needed Ampere; the logs show
   vLLM picking `MarlinLinearKernel` for both AWQ and GPTQ on the T4 and running.
 

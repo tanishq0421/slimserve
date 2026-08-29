@@ -16,10 +16,13 @@ from slimserve.pipeline import benchmark_config
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
+    parser.add_argument("--model", help="override model_path (e.g. a local checkpoint dir)")
     args = parser.parse_args()
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
+    if args.model:                              # serve a local dir instead of the HF repo
+        cfg["model_path"] = args.model
 
     engine_cfg = engine_config_from_dict(cfg)   # TP=2 spans both T4s for FP16 7B
     result = benchmark_config(

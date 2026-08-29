@@ -14,7 +14,7 @@ dependencies = [
 serve = ["vllm", "autoawq"]
 eval = ["datasets"]
 viz = ["matplotlib", "pandas"]
-train = ["transformers", "peft", "bitsandbytes", "datasets", "accelerate"]
+train = ["transformers", "peft", "bitsandbytes<0.48", "datasets", "accelerate"]
 dev = ["pytest", "ruff"]
 
 [build-system]

@@ -22,19 +22,26 @@ Live table in [`results/benchmarks.csv`](results/benchmarks.csv); per-run notes 
 |---|---|---|---|---|---|---|---|---|---|---|
 | teacher_fp16 | 7B | fp16 | 2× T4 | 0.990 | 0.795 | 631.1 | 55.3 | 4655 | 27462 | 0.1761 |
 | teacher_int8 | 7B | int8 (GPTQ) | 1× T4 | 0.985 | 0.795 | 548.3 | 43.5 | 1522 | 13408 | 0.1013 |
-| teacher_int4_awq | 7B | int4 (AWQ) | 1× T4 | 0.990 | 0.780 | 576.6 | 36.6 | 1278 | 14422 | **0.0964** |
+| teacher_int4_awq | 7B | int4 (AWQ) | 1× T4 | 0.990 | 0.780 | 576.6 | 36.6 | 1278 | 14422 | 0.0964 |
+| student_1p5b_base | 1.5B | fp16 | 1× T4 | 0.985 | 0.770 | 1470.3 | 26.6 | 670 | 13808 | 0.0378 |
+| student_0p5b_base | 0.5B | fp16 | 1× T4 | 0.975 | 0.715 | 3373.0 | 23.6 | 270 | 13836 | **0.0165** |
 
 <sub>Accuracy = tool-calling on 200 held-out xLAM examples: `tool_acc` = right tool,
 `arg_acc` = right tool **and** right arguments (strict exact-match, so a floor). ±1–2 pts is
-noise at n=200. Measured on Kaggle T4s; `$/1M` uses $0.20/hr-per-T4 (FP16's 2× T4 = $0.40/hr).</sub>
+noise at n=200. Students are **off-the-shelf** (no distillation yet). Measured on Kaggle T4s;
+`$/1M` uses $0.20/hr-per-T4 (FP16's 2× T4 = $0.40/hr).</sub>
 
-**Takeaways:** Quantization is **essentially free for this task.** INT4 matches FP16 on tool
-selection (0.99 = 0.99) and is within noise on arguments (0.78 vs 0.795), while serving at
-**~1.8× lower cost**, **better latency**, on **half the hardware** (one 16 GB T4 vs two).
-FP16 7B doesn't fit on a single T4 — quantization is what unlocks single-GPU serving.
-Weights shrink **~14 → 8.3 → 5.3 GiB** (FP16→INT8→INT4); the freed memory becomes KV-cache
-headroom. And FP16's p99 latency is **~3.6× worse** than INT4's — tensor-parallelism across two
-T4s (no fast GPU link on Kaggle) pays a per-token communication cost that single-GPU INT4 avoids.
+**Takeaways:**
+
+- **Quantization is essentially free** for this task: INT4 matches FP16 on tool selection
+  (0.99 = 0.99), within noise on arguments, at **~1.8× lower cost** and better latency, on half
+  the hardware. (Weights shrink ~14 → 8.3 → 5.3 GiB FP16→INT8→INT4; the freed memory becomes
+  KV-cache headroom. FP16's p99 is ~3.6× *worse* — tensor-parallelism across two link-less T4s
+  pays a per-token communication cost single-GPU INT4 avoids.)
+- **You may not need the big model at all.** An **off-the-shelf 1.5B** matches the 7B teacher on
+  tool selection (0.985 vs 0.990) at **~4.7× lower cost, 2.3× throughput, 7× better p99** — and
+  even a **0.5B** holds 0.975 tool accuracy at **~10× lower cost**. The only real gap is argument
+  accuracy on the smallest model (0.715). This is the "SLM-first agents" result on our own numbers.
 
 Full write-up, including what these numbers *don't* prove, in
 [`results/FINDINGS.md`](results/FINDINGS.md).

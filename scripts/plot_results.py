@@ -1,9 +1,8 @@
-"""Generate the Phase 1 cost-vs-quality chart from results/benchmarks.csv.
+"""Generate the SlimServe cost-vs-quality chart from results/benchmarks.csv.
 
-Small-multiple bar panels (magnitude comparison) — deliberately NOT a dual-axis
-chart, since cost (~0.1) and accuracy (~0.99) live on totally different scales.
-Colors are the colorblind-safe Okabe-Ito set, and every bar is directly labeled
-so identity never depends on color alone.
+Two panels (small multiples), NOT a dual-axis chart: cost and accuracy live on
+totally different scales. Colors are the colorblind-safe Okabe-Ito set and every
+bar is directly labeled, so identity never rests on color alone.
 
     python scripts/plot_results.py
 """
@@ -19,52 +18,64 @@ import pandas as pd              # noqa: E402
 CSV = "results/benchmarks.csv"
 OUT = "results/charts/phase1_cost_vs_quality.png"
 
-ORDER = ["fp16", "int8", "int4"]                       # fixed category order
-COLORS = {"fp16": "#0072B2", "int8": "#E69F00", "int4": "#009E73"}
-LABELS = {"fp16": "FP16", "int8": "INT8", "int4": "INT4"}
+# fixed order: most expensive/biggest -> cheapest/smallest
+ORDER = ["teacher_fp16", "teacher_int8", "teacher_int4_awq",
+         "student_1p5b_base", "student_0p5b_base"]
+LABELS = {
+    "teacher_fp16": "7B\nfp16", "teacher_int8": "7B\nint8",
+    "teacher_int4_awq": "7B\nint4", "student_1p5b_base": "1.5B\nbase",
+    "student_0p5b_base": "0.5B\nbase",
+}
+BLUE, ORANGE, GREEN = "#0072B2", "#E69F00", "#009E73"
 
 
 def main() -> None:
-    df = pd.read_csv(CSV).set_index("precision").loc[ORDER]
+    df = pd.read_csv(CSV).set_index("config_name").loc[ORDER]
     x = range(len(ORDER))
-    colors = [COLORS[p] for p in ORDER]
-    xlabels = [LABELS[p] for p in ORDER]
+    xlabels = [LABELS[c] for c in ORDER]
 
-    panels = [
-        ("Cost  ($ / 1M tokens)", df["cost_per_1m_tokens"], "${:.3f}", None),
-        ("Tool-calling accuracy", df["tool_acc"], "{:.2f}", (0, 1.08)),
-        ("Peak VRAM  (GB)", df["vram_mb"] / 1000.0, "{:.1f}", None),
-    ]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.0))
 
-    fig, axes = plt.subplots(1, 3, figsize=(11, 3.7))
-    for ax, (title, series, fmt, ylim) in zip(axes, panels):
-        bars = ax.bar(x, series.values, color=colors, width=0.62, zorder=3)
-        ax.set_title(title, fontsize=11, fontweight="bold", pad=10, loc="left",
-                     color="#222")
+    # --- Panel 1: cost ---
+    bars = ax1.bar(x, df["cost_per_1m_tokens"].values, color=GREEN, width=0.66, zorder=3)
+    ax1.set_title("Serving cost  ($ / 1M tokens)", fontsize=11.5, fontweight="bold",
+                  loc="left", pad=10, color="#222")
+    ax1.set_ylim(0, df["cost_per_1m_tokens"].max() * 1.18)
+    for b, v in zip(bars, df["cost_per_1m_tokens"].values):
+        ax1.text(b.get_x() + b.get_width() / 2, b.get_height(), f"${v:.3f}",
+                 ha="center", va="bottom", fontsize=9.5, fontweight="bold", color="#222")
+
+    # --- Panel 2: accuracy (tool + arg, grouped) ---
+    w = 0.36
+    x0 = [i - w / 2 for i in x]
+    x1 = [i + w / 2 for i in x]
+    b_tool = ax2.bar(x0, df["tool_acc"].values, width=w, color=BLUE, zorder=3, label="tool acc")
+    b_arg = ax2.bar(x1, df["arg_acc"].values, width=w, color=ORANGE, zorder=3, label="arg acc")
+    ax2.set_title("Tool-calling accuracy", fontsize=11.5, fontweight="bold",
+                  loc="left", pad=10, color="#222")
+    ax2.set_ylim(0, 1.28)
+    for bars_, vals in ((b_tool, df["tool_acc"].values), (b_arg, df["arg_acc"].values)):
+        for b, v in zip(bars_, vals):
+            ax2.text(b.get_x() + b.get_width() / 2, b.get_height(), f"{v:.2f}",
+                     ha="center", va="bottom", fontsize=8, color="#333")
+    ax2.legend(loc="upper center", frameon=False, fontsize=9, ncol=2)
+
+    for ax in (ax1, ax2):
         ax.set_xticks(list(x))
-        ax.set_xticklabels(xlabels, fontsize=10)
-        if ylim:
-            ax.set_ylim(*ylim)
-        else:
-            ax.set_ylim(0, series.max() * 1.18)
+        ax.set_xticklabels(xlabels, fontsize=9.5)
         for s in ("top", "right", "left"):
             ax.spines[s].set_visible(False)
         ax.spines["bottom"].set_color("#cccccc")
-        ax.tick_params(length=0, labelcolor="#444444")
+        ax.tick_params(length=0, labelcolor="#444")
         ax.set_yticks([])
-        for b, v in zip(bars, series.values):
-            ax.text(b.get_x() + b.get_width() / 2, b.get_height(), fmt.format(v),
-                    ha="center", va="bottom", fontsize=10, fontweight="bold",
-                    color="#222222")
 
     fig.suptitle(
-        "Quantizing Qwen2.5-7B for tool calling — cost & memory drop, accuracy holds",
-        fontsize=12.5, fontweight="bold", x=0.015, ha="left", color="#111111")
-    fig.text(
-        0.015, 0.01,
-        "7B teacher on Kaggle T4s  ·  FP16 = 2×T4, INT8/INT4 = 1×T4  ·  "
-        "accuracy on 200 held-out xLAM tool calls",
-        fontsize=8.5, color="#888888", ha="left")
+        "Same tool-calling task, 0.5B → 7B: cost drops ~10×, accuracy barely moves",
+        fontsize=12.5, fontweight="bold", x=0.015, ha="left", color="#111")
+    fig.text(0.015, 0.005,
+             "Qwen2.5 on Kaggle T4s  ·  accuracy on 200 held-out xLAM tool calls  ·  "
+             "students are OFF-THE-SHELF (no distillation yet)",
+             fontsize=8.5, color="#888", ha="left")
     fig.tight_layout(rect=[0, 0.04, 1, 0.92])
     Path(OUT).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=160, bbox_inches="tight", facecolor="white")

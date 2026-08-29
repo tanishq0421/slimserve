@@ -18,18 +18,20 @@ tool-calling accuracy** across every configuration.
 Live table in [`results/benchmarks.csv`](results/benchmarks.csv); per-run notes in
 [`results/logs/`](results/logs/). Regenerate the chart with `python scripts/plot_results.py`.
 
-| config | params | precision | GPUs | tool_acc | arg_acc | tok/s | TTFT (ms) | p99 (ms) | VRAM (MB) | $/1M tok |
-|---|---|---|---|---|---|---|---|---|---|---|
-| teacher_fp16 | 7B | fp16 | 2× T4 | 0.990 | 0.795 | 631.1 | 55.3 | 4655 | 27462 | 0.1761 |
-| teacher_int8 | 7B | int8 (GPTQ) | 1× T4 | 0.985 | 0.795 | 548.3 | 43.5 | 1522 | 13408 | 0.1013 |
-| teacher_int4_awq | 7B | int4 (AWQ) | 1× T4 | 0.990 | 0.780 | 576.6 | 36.6 | 1278 | 14422 | 0.0964 |
-| student_1p5b_base | 1.5B | fp16 | 1× T4 | 0.985 | 0.770 | 1470.3 | 26.6 | 670 | 13808 | 0.0378 |
-| student_0p5b_base | 0.5B | fp16 | 1× T4 | 0.975 | 0.715 | 3373.0 | 23.6 | 270 | 13836 | **0.0165** |
+| config | params | precision | tool_acc | arg_acc | tok/s | p99 (ms) | $/1M tok |
+|---|---|---|---|---|---|---|---|
+| teacher_fp16 | 7B | fp16 (2× T4) | 0.990 | 0.795 | 631.1 | 4655 | 0.1761 |
+| teacher_int8 | 7B | int8 (GPTQ) | 0.985 | 0.795 | 548.3 | 1522 | 0.1013 |
+| teacher_int4_awq | 7B | int4 (AWQ) | 0.990 | 0.780 | 576.6 | 1278 | 0.0964 |
+| student_1p5b_base | 1.5B | fp16 (off-the-shelf) | 0.985 | 0.770 | 1470.3 | 670 | 0.0378 |
+| **student_1p5b_gold** | 1.5B | fp16 (fine-tuned, SFT) | **1.000** | **0.795** | 1465.1 | 667 | 0.0379 |
+| **student_1p5b_distill** | 1.5B | fp16 (distilled) | **1.000** | 0.790 | 1429.9 | 677 | 0.0389 |
+| student_0p5b_base | 0.5B | fp16 (off-the-shelf) | 0.975 | 0.715 | 3373.0 | 270 | **0.0165** |
 
 <sub>Accuracy = tool-calling on 200 held-out xLAM examples: `tool_acc` = right tool,
 `arg_acc` = right tool **and** right arguments (strict exact-match, so a floor). ±1–2 pts is
-noise at n=200. Students are **off-the-shelf** (no distillation yet). Measured on Kaggle T4s;
-`$/1M` uses $0.20/hr-per-T4 (FP16's 2× T4 = $0.40/hr).</sub>
+noise at n=200. Fine-tuned on 5k xLAM examples via QLoRA (train slice ≠ eval tail — no leakage).
+Measured on Kaggle T4s, single GPU except the FP16 teacher; `$/1M` uses $0.20/hr-per-T4.</sub>
 
 **Takeaways:**
 
@@ -42,6 +44,11 @@ noise at n=200. Students are **off-the-shelf** (no distillation yet). Measured o
   tool selection (0.985 vs 0.990) at **~4.7× lower cost, 2.3× throughput, 7× better p99** — and
   even a **0.5B** holds 0.975 tool accuracy at **~10× lower cost**. The only real gap is argument
   accuracy on the smallest model (0.715). This is the "SLM-first agents" result on our own numbers.
+- **Fine-tuning closes the gap — a 1.5B matches the 7B teacher.** QLoRA lifted the 1.5B from
+  0.985/0.770 to **1.00 tool / 0.795 arg**, landing right at the teacher (0.99 / 0.795) at
+  **~4.5× lower cost** and lower latency. And a tested-not-assumed finding: **distillation did not
+  beat plain SFT** (gold 0.795 vs distill 0.790) — because the base student was already near the
+  teacher, its answers weren't a richer signal than the ground-truth labels.
 
 Full write-up, including what these numbers *don't* prove, in
 [`results/FINDINGS.md`](results/FINDINGS.md).

@@ -18,12 +18,14 @@ import pandas as pd              # noqa: E402
 CSV = "results/benchmarks.csv"
 OUT = "results/charts/phase1_cost_vs_quality.png"
 
-# fixed order: most expensive/biggest -> cheapest/smallest
+# fixed order: 7B teacher variants, the 1.5B trio (base -> fine-tuned), then 0.5B
 ORDER = ["teacher_fp16", "teacher_int8", "teacher_int4_awq",
-         "student_1p5b_base", "student_0p5b_base"]
+         "student_1p5b_base", "student_1p5b_gold", "student_1p5b_distill",
+         "student_0p5b_base"]
 LABELS = {
     "teacher_fp16": "7B\nfp16", "teacher_int8": "7B\nint8",
     "teacher_int4_awq": "7B\nint4", "student_1p5b_base": "1.5B\nbase",
+    "student_1p5b_gold": "1.5B\ngold", "student_1p5b_distill": "1.5B\ndistil",
     "student_0p5b_base": "0.5B\nbase",
 }
 BLUE, ORANGE, GREEN = "#0072B2", "#E69F00", "#009E73"
@@ -70,11 +72,11 @@ def main() -> None:
         ax.set_yticks([])
 
     fig.suptitle(
-        "Same tool-calling task, 0.5B → 7B: cost drops ~10×, accuracy barely moves",
+        "A fine-tuned 1.5B matches the 7B teacher on tool-calling — at ~4.5× lower cost",
         fontsize=12.5, fontweight="bold", x=0.015, ha="left", color="#111")
     fig.text(0.015, 0.005,
              "Qwen2.5 on Kaggle T4s  ·  accuracy on 200 held-out xLAM tool calls  ·  "
-             "students are OFF-THE-SHELF (no distillation yet)",
+             "gold = SFT on labels, distil = distilled from the 7B",
              fontsize=8.5, color="#888", ha="left")
     fig.tight_layout(rect=[0, 0.04, 1, 0.92])
     Path(OUT).parent.mkdir(parents=True, exist_ok=True)

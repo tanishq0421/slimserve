@@ -81,3 +81,53 @@ good — are backed by numbers, not assumed.
 The honest asterisks: it's a strict, single-call, 200-example metric, one run per config,
 on old hardware, using pre-quantized checkpoints. None of that breaks the conclusion for
 this task — but it's why I'd call this strong signal, not the last word.
+
+# Phase 3 notes — fine-tuning a small SLM
+
+## What I was trying to find out
+
+The base 1.5B already nearly matched the 7B teacher out of the box; the only real gap was
+argument accuracy (0.770 vs the teacher's 0.795). So: can QLoRA fine-tuning close that gap,
+and does distilling from the teacher beat plain SFT on the ground-truth labels?
+
+Setup: QLoRA (4-bit base + LoRA adapters) on 5,000 xLAM examples, 1 epoch. Two recipes —
+**gold** (train on the dataset's true tool calls) and **distill** (train on the 7B teacher's
+own tool calls). Train slice is the front of xLAM; eval is the held-out tail — no overlap.
+
+## What the numbers said
+
+| 1.5B model | tool_acc | arg_acc | $/1M |
+|---|---|---|---|
+| base (off-the-shelf) | 0.985 | 0.770 | 0.038 |
+| gold (SFT) | 1.000 | 0.795 | 0.038 |
+| distill | 1.000 | 0.790 | 0.039 |
+| *(7B teacher)* | *0.990* | *0.795* | *0.176* |
+
+**1. Fine-tuning matched the 7B teacher with a 1.5B.** Both recipes lifted the student to
+tool 1.00 / arg 0.795 — level with (or a hair past) the teacher — at ~4.5× lower cost and
+lower latency. A sub-2B model doing tool-calling as well as a 7B is the whole thesis, and it
+held up.
+
+**2. Distillation did NOT beat plain SFT** (gold 0.795 vs distill 0.790 — a tie). This is the
+interesting, tested-not-assumed part. Sequence distillation only helps when the teacher is a
+meaningfully better source than the labels. Here the base student was *already* near the
+teacher, so the teacher's answers carried no extra signal over the ground truth — and gold SFT,
+being simpler, is the better default. If the student had started far behind (a genuinely weak
+model), distillation would likely have earned its keep. Worth testing on the 0.5B, which has
+the bigger gap.
+
+## What this still doesn't prove
+
+1. **`tool_acc = 1.00` reads suspiciously perfect.** It means the right tool on all 200
+   held-out prompts. There's no leakage (train = front, eval = tail), and it's a narrow task,
+   so it's plausible — but at n=200 treat "1.00 vs 0.99" as a tie, not a win.
+2. **`arg_acc` is still strict exact-match**, so 0.795 is a floor; the true argument quality is
+   a bit higher for all of them.
+3. **One run, one epoch, 5k examples.** More data / a weaker student / a harder eval could all
+   shift the gold-vs-distill picture.
+
+## Bottom line (Phase 3)
+
+For tool-calling, a **fine-tuned 1.5B matches the 7B teacher at a fraction of the cost** — the
+compression thesis, end to end. And distillation is not automatically better than SFT: it pays
+off only when the teacher genuinely outclasses the student, which wasn't the case here.

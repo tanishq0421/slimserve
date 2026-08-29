@@ -27,6 +27,8 @@ def main() -> None:
     p.add_argument("--teacher-config", help="engine YAML (teacher mode only)")
     p.add_argument("--keep-all", action="store_true",
                    help="teacher mode: keep even wrong-tool completions")
+    p.add_argument("--tensor-parallel", type=int, default=None,
+                   help="override TP for teacher gen (e.g. 2 to use both T4s)")
     args = p.parse_args()
 
     if args.mode == "gold":
@@ -39,6 +41,8 @@ def main() -> None:
         from slimserve.core.registry import build
         with open(args.teacher_config) as f:
             cfg = yaml.safe_load(f)
+        if args.tensor_parallel:                    # e.g. 2 -> use both T4s
+            cfg["tensor_parallel_size"] = args.tensor_parallel
         engine = build("engine", cfg["engine"], engine_config_from_dict(cfg))
         n = build_teacher(args.num, engine, args.out,
                           only_correct=not args.keep_all)

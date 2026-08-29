@@ -1,0 +1,13 @@
+# Phase 3 — QLoRA SFT of the 1.5B student on GOLD labels (the baseline recipe).
+trainer: qlora
+base_model: Qwen/Qwen2.5-1.5B-Instruct
+dataset: data/sft_gold.jsonl
+output_dir: checkpoints/student_1p5b_gold
+lora_r: 16
+lora_alpha: 32
+epochs: 1
+lr: 2.0e-4
+load_in_4bit: true          # QLoRA: 4-bit frozen base + LoRA adapters
+max_seq_len: 2048
+batch_size: 8
+grad_accum: 2

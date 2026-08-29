@@ -1,0 +1,14 @@
+# Phase 3, Step 5 — evaluate the FINE-TUNED 0.5B student (gold SFT), served from HF.
+config_name: student_0p5b_gold
+engine: vllm
+model_path: tanishq0421/slimserve-student_0p5b_gold
+precision: fp16
+kv_cache_quant: false
+max_num_seqs: 256
+tensor_parallel_size: 1
+gpu_memory_utilization: 0.90
+max_model_len: 8192
+params_b: 0.5
+gpu_hourly_usd: 0.20
+evaluator: toolcall
+eval_samples: 200

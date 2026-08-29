@@ -79,6 +79,8 @@ class QLoRATrainer(BaseTrainer):
             optim="paged_adamw_8bit",
             logging_steps=10,
             fp16=True,                              # T4 has no bf16
+            gradient_checkpointing=True,            # trade compute for memory
+            gradient_checkpointing_kwargs={"use_reentrant": False},
             seed=config.extra.get("seed", 3407),
             report_to="none",
             save_strategy="no",

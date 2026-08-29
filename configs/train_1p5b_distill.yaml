@@ -10,5 +10,5 @@ epochs: 1
 lr: 2.0e-4
 load_in_4bit: true
 max_seq_len: 2048
-batch_size: 8
-grad_accum: 2
+batch_size: 2          # small per-step batch to fit a 16GB T4...
+grad_accum: 8          # ...but effective batch stays 16

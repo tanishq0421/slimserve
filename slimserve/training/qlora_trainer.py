@@ -91,18 +91,11 @@ class QLoRATrainer(BaseTrainer):
                        data_collator=collator)
 
     def save(self, model, tokenizer, config: TrainConfig) -> str:
-        # You can't cleanly merge LoRA into a 4-bit base, so: save the adapter,
-        # reload a fresh fp16 base on CPU, merge, and write a standalone
-        # checkpoint that our vLLM engine can serve directly in Step 5.
-        from peft import PeftModel
-        from transformers import AutoModelForCausalLM
-
+        # Save only the LoRA adapter here — reliable and in-process. Merging into
+        # a standalone model reloads the fp16 base on CPU, which is a RAM spike;
+        # doing it inside training (and in parallel) can OOM. So merging is a
+        # separate, sequential step: scripts/merge_adapter.py.
         adapter_dir = f"{config.output_dir}_adapter"
         model.save_pretrained(adapter_dir)
-
-        base = AutoModelForCausalLM.from_pretrained(
-            config.base_model, torch_dtype=torch.float16)   # CPU, avoids GPU OOM
-        merged = PeftModel.from_pretrained(base, adapter_dir).merge_and_unload()
-        merged.save_pretrained(config.output_dir)
-        tokenizer.save_pretrained(config.output_dir)
-        return config.output_dir
+        tokenizer.save_pretrained(adapter_dir)
+        return adapter_dir

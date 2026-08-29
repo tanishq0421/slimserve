@@ -72,12 +72,14 @@ class QLoRATrainer(BaseTrainer):
         return to_dataset(load_records(config.dataset), tokenizer, max_len)
 
     def build_trainer(self, model, tokenizer, dataset, config: TrainConfig):
+        import inspect
+
         from transformers import (DataCollatorForSeq2Seq, Trainer,
                                    TrainingArguments)
 
         # 8-bit optimizer needs bitsandbytes; plain adamw for the bnb-free fp16 path.
         optim = "paged_adamw_8bit" if config.load_in_4bit else "adamw_torch"
-        args = TrainingArguments(
+        wanted = dict(
             output_dir=config.output_dir,
             per_device_train_batch_size=config.extra.get("batch_size", 8),
             gradient_accumulation_steps=config.extra.get("grad_accum", 2),
@@ -94,6 +96,9 @@ class QLoRATrainer(BaseTrainer):
             report_to="none",
             save_strategy="no",
         )
+        # Pass only args this installed transformers accepts (versions drift a lot).
+        supported = set(inspect.signature(TrainingArguments.__init__).parameters)
+        args = TrainingArguments(**{k: v for k, v in wanted.items() if k in supported})
         collator = DataCollatorForSeq2Seq(
             tokenizer, padding=True, label_pad_token_id=-100)
         return Trainer(model=model, args=args, train_dataset=dataset,

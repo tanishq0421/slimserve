@@ -1,23 +1,21 @@
-"""QLoRA fine-tuning via Unsloth (Phase 3).
+"""QLoRA fine-tuning via transformers + peft + bitsandbytes (Phase 3).
 
-One trainer handles BOTH recipes — plain SFT-on-gold and sequence-level
-distillation — because sequence KD *is* just SFT on the teacher's completions.
-The only thing that differs is which dataset file ``config.dataset`` points at
-(built in Phase 2). Logit KD, which needs a custom loss, is a separate trainer.
+Deliberately NOT Unsloth: Unsloth drags in vLLM, which repeatedly broke the
+Kaggle environment (CUDA-lib mismatch). This portable stack — 4-bit base
+(bitsandbytes NF4) + LoRA adapters (peft) + the plain HuggingFace Trainer — has
+no vLLM dependency and is version-stable.
 
-Heavy imports (unsloth/trl) live inside the hooks so the package imports fine on a
-machine without a GPU; the training path itself is exercised on Kaggle.
+One trainer handles both recipes (gold SFT and sequence distillation); only the
+dataset file differs. Heavy imports live inside the hooks so the package imports
+fine on a GPU-less machine.
 """
 from __future__ import annotations
 
 from slimserve.core.config import TrainConfig
 from slimserve.core.registry import register
 from slimserve.training.base import BaseTrainer
-from slimserve.training.dataset import build_dataset, load_records
+from slimserve.training.dataset import load_records, to_dataset
 
-# Qwen2.5 chat (ChatML) turn markers — used to train on the assistant turn only.
-_USER_MARK = "<|im_start|>user\n"
-_ASSISTANT_MARK = "<|im_start|>assistant\n"
 _LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
                  "gate_proj", "up_proj", "down_proj"]
 
@@ -25,34 +23,52 @@ _LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
 @register("trainer", "qlora")
 class QLoRATrainer(BaseTrainer):
     def load_model(self, config: TrainConfig):
-        from unsloth import FastLanguageModel
+        import torch
+        from peft import (LoraConfig, get_peft_model,
+                          prepare_model_for_kbit_training)
+        from transformers import (AutoModelForCausalLM, AutoTokenizer,
+                                   BitsAndBytesConfig)
 
-        max_seq = config.extra.get("max_seq_len", 2048)
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=config.base_model,
-            max_seq_length=max_seq,
-            load_in_4bit=config.load_in_4bit,      # the "Q" in QLoRA (NF4 base)
-            dtype=None,
+        tokenizer = AutoTokenizer.from_pretrained(config.base_model)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        quant = None
+        if config.load_in_4bit:                     # the "Q" in QLoRA
+            quant = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+            )
+
+        model = AutoModelForCausalLM.from_pretrained(
+            config.base_model,
+            quantization_config=quant,
+            torch_dtype=torch.float16,
+            device_map={"": 0},
         )
-        model = FastLanguageModel.get_peft_model(   # the "LoRA" adapters
-            model,
+        model = prepare_model_for_kbit_training(model)
+        model = get_peft_model(model, LoraConfig(   # the "LoRA" adapters
             r=config.lora_r,
             lora_alpha=config.lora_alpha,
             lora_dropout=0.0,
+            bias="none",
+            task_type="CAUSAL_LM",
             target_modules=_LORA_TARGETS,
-            use_gradient_checkpointing="unsloth",
-            random_state=config.extra.get("seed", 3407),
-        )
+        ))
+        model.print_trainable_parameters()
         return model, tokenizer
 
     def prepare_dataset(self, config: TrainConfig, tokenizer):
-        return build_dataset(load_records(config.dataset), tokenizer)
+        max_len = config.extra.get("max_seq_len", 2048)
+        return to_dataset(load_records(config.dataset), tokenizer, max_len)
 
     def build_trainer(self, model, tokenizer, dataset, config: TrainConfig):
-        from trl import SFTConfig, SFTTrainer
-        from unsloth.chat_templates import train_on_responses_only
+        from transformers import (DataCollatorForSeq2Seq, Trainer,
+                                   TrainingArguments)
 
-        args = SFTConfig(
+        args = TrainingArguments(
             output_dir=config.output_dir,
             per_device_train_batch_size=config.extra.get("batch_size", 8),
             gradient_accumulation_steps=config.extra.get("grad_accum", 2),
@@ -60,22 +76,31 @@ class QLoRATrainer(BaseTrainer):
             learning_rate=config.lr,
             warmup_ratio=0.03,
             lr_scheduler_type="cosine",
-            optim="adamw_8bit",
+            optim="paged_adamw_8bit",
             logging_steps=10,
+            fp16=True,                              # T4 has no bf16
             seed=config.extra.get("seed", 3407),
             report_to="none",
-            dataset_text_field="text",
-            max_seq_length=config.extra.get("max_seq_len", 2048),
+            save_strategy="no",
         )
-        trainer = SFTTrainer(model=model, tokenizer=tokenizer,
-                             train_dataset=dataset, args=args)
-        # completion-only loss: mask the prompt, train only on the assistant turn.
-        return train_on_responses_only(
-            trainer, instruction_part=_USER_MARK, response_part=_ASSISTANT_MARK)
+        collator = DataCollatorForSeq2Seq(
+            tokenizer, padding=True, label_pad_token_id=-100)
+        return Trainer(model=model, args=args, train_dataset=dataset,
+                       data_collator=collator)
 
     def save(self, model, tokenizer, config: TrainConfig) -> str:
-        # merge LoRA into the base and save a standalone 16-bit checkpoint that
-        # our vLLM engine can serve directly in Step 5.
-        model.save_pretrained_merged(
-            config.output_dir, tokenizer, save_method="merged_16bit")
+        # You can't cleanly merge LoRA into a 4-bit base, so: save the adapter,
+        # reload a fresh fp16 base on CPU, merge, and write a standalone
+        # checkpoint that our vLLM engine can serve directly in Step 5.
+        from peft import PeftModel
+        from transformers import AutoModelForCausalLM
+
+        adapter_dir = f"{config.output_dir}_adapter"
+        model.save_pretrained(adapter_dir)
+
+        base = AutoModelForCausalLM.from_pretrained(
+            config.base_model, torch_dtype=torch.float16)   # CPU, avoids GPU OOM
+        merged = PeftModel.from_pretrained(base, adapter_dir).merge_and_unload()
+        merged.save_pretrained(config.output_dir)
+        tokenizer.save_pretrained(config.output_dir)
         return config.output_dir

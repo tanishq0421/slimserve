@@ -1,9 +1,9 @@
-"""Turn Phase-2 data records into training text.
+"""Turn Phase-2 data records into tokenized training examples.
 
-A record is {query, tools, target}. We render the *prompt* with the student's own
-chat template (so tools are formatted exactly as the model expects), then append
-the target tool call + EOS. Kept separate from the trainer (single responsibility)
-and free of heavy deps so the pure logic is unit-testable.
+Renders the prompt with the student's chat template (tools included), appends the
+target tool call + EOS, tokenizes, and masks the prompt tokens in the labels so
+loss is computed on the completion only. Kept separate from the trainer (single
+responsibility) and dependency-light so the pure logic is unit-testable.
 """
 from __future__ import annotations
 
@@ -15,21 +15,34 @@ def load_records(path: str) -> list[dict]:
         return [json.loads(line) for line in f if line.strip()]
 
 
-def render_example(record: dict, tokenizer) -> str:
-    """Full training text: chat-templated prompt (with tools) + target + EOS."""
-    prompt = tokenizer.apply_chat_template(
+def _prompt(record: dict, tokenizer) -> str:
+    return tokenizer.apply_chat_template(
         [{"role": "user", "content": record["query"]}],
         tools=record.get("tools") or None,
         add_generation_prompt=True,
         tokenize=False,
     )
-    eos = tokenizer.eos_token or ""
-    return prompt + record["target"] + eos
 
 
-def build_dataset(records: list[dict], tokenizer):
-    """Return an HF Dataset with a single ``text`` column ready for SFT."""
+def tokenize_example(record: dict, tokenizer, max_len: int) -> dict:
+    """Prompt + target, tokenized, with the prompt masked out of the labels."""
+    prompt = _prompt(record, tokenizer)
+    completion = record["target"] + (tokenizer.eos_token or "")
+    p_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+    c_ids = tokenizer(completion, add_special_tokens=False)["input_ids"]
+    input_ids = (p_ids + c_ids)[:max_len]
+    labels = ([-100] * len(p_ids) + c_ids)[:max_len]   # -100 = ignore in the loss
+    return {
+        "input_ids": input_ids,
+        "attention_mask": [1] * len(input_ids),
+        "labels": labels,
+    }
+
+
+def to_dataset(records: list[dict], tokenizer, max_len: int):
+    """Return an HF Dataset of tokenized, completion-masked examples."""
     from datasets import Dataset
 
-    texts = [render_example(r, tokenizer) for r in records]
-    return Dataset.from_dict({"text": texts})
+    return Dataset.from_list(
+        [tokenize_example(r, tokenizer, max_len) for r in records]
+    )

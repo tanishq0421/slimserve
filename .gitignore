@@ -5,12 +5,13 @@ __pycache__/
 .venv/
 venv/
 
-# Data / model artifacts (keep the repo light)
+# Data / model artifacts (keep the repo light) — anchored to repo root so the
+# source package slimserve/data/ is NOT ignored.
 *.safetensors
 *.bin
 *.gguf
-checkpoints/
-data/
+/checkpoints/
+/data/
 
 # Benchmark outputs are committed selectively; ignore scratch plots
 results/charts/*.tmp

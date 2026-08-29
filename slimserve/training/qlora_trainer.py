@@ -24,17 +24,19 @@ _LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
 class QLoRATrainer(BaseTrainer):
     def load_model(self, config: TrainConfig):
         import torch
-        from peft import (LoraConfig, get_peft_model,
-                          prepare_model_for_kbit_training)
-        from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                                   BitsAndBytesConfig)
+        from peft import LoraConfig, get_peft_model
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         tokenizer = AutoTokenizer.from_pretrained(config.base_model)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
+        # Only touch bitsandbytes (BitsAndBytesConfig / prepare_model_for_kbit_training)
+        # in the 4-bit path — so fp16 training never imports it, and a broken bnb build
+        # (e.g. no CUDA-13 binary on Kaggle) can't crash the fp16 route.
         quant = None
-        if config.load_in_4bit:                     # the "Q" in QLoRA
+        if config.load_in_4bit:                     # the "Q" in QLoRA (needs bitsandbytes)
+            from transformers import BitsAndBytesConfig
             quant = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",
@@ -49,6 +51,7 @@ class QLoRATrainer(BaseTrainer):
             device_map={"": 0},
         )
         if config.load_in_4bit:
+            from peft import prepare_model_for_kbit_training
             model = prepare_model_for_kbit_training(model)
         else:
             # fp16 LoRA (no bitsandbytes) — for small models that fit without 4-bit.

@@ -103,3 +103,19 @@ def engine_config_from_dict(cfg: dict) -> EngineConfig:
             "quantization": cfg.get("quantization"),
         },
     )
+
+
+def train_config_from_dict(cfg: dict) -> TrainConfig:
+    """Build a TrainConfig from a parsed YAML dict (used by the training CLI)."""
+    knobs = ("max_seq_len", "batch_size", "grad_accum", "seed")
+    return TrainConfig(
+        base_model=cfg["base_model"],
+        dataset=cfg["dataset"],
+        output_dir=cfg["output_dir"],
+        lora_r=cfg.get("lora_r", 16),
+        lora_alpha=cfg.get("lora_alpha", 32),
+        epochs=cfg.get("epochs", 1),
+        lr=cfg.get("lr", 2e-4),
+        load_in_4bit=cfg.get("load_in_4bit", True),
+        extra={k: cfg[k] for k in knobs if k in cfg},
+    )

@@ -7,7 +7,7 @@ lora_r: 16
 lora_alpha: 32
 epochs: 1
 lr: 2.0e-4
-load_in_4bit: true
+load_in_4bit: false         # 0.5B fits in fp16 on a T4 — skip bitsandbytes entirely
 max_seq_len: 2048
 batch_size: 4               # 0.5B is small, but keep batch modest for T4 memory
 grad_accum: 4               # effective batch 16

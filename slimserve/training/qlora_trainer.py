@@ -48,7 +48,11 @@ class QLoRATrainer(BaseTrainer):
             torch_dtype=torch.float16,
             device_map={"": 0},
         )
-        model = prepare_model_for_kbit_training(model)
+        if config.load_in_4bit:
+            model = prepare_model_for_kbit_training(model)
+        else:
+            # fp16 LoRA (no bitsandbytes) — for small models that fit without 4-bit.
+            model.enable_input_require_grads()      # needed for gradient checkpointing
         model = get_peft_model(model, LoraConfig(   # the "LoRA" adapters
             r=config.lora_r,
             lora_alpha=config.lora_alpha,
@@ -68,6 +72,8 @@ class QLoRATrainer(BaseTrainer):
         from transformers import (DataCollatorForSeq2Seq, Trainer,
                                    TrainingArguments)
 
+        # 8-bit optimizer needs bitsandbytes; plain adamw for the bnb-free fp16 path.
+        optim = "paged_adamw_8bit" if config.load_in_4bit else "adamw_torch"
         args = TrainingArguments(
             output_dir=config.output_dir,
             per_device_train_batch_size=config.extra.get("batch_size", 8),
@@ -76,7 +82,7 @@ class QLoRATrainer(BaseTrainer):
             learning_rate=config.lr,
             warmup_ratio=0.03,
             lr_scheduler_type="cosine",
-            optim="paged_adamw_8bit",
+            optim=optim,
             logging_steps=10,
             fp16=True,                              # T4 has no bf16
             gradient_checkpointing=True,            # trade compute for memory

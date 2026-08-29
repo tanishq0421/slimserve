@@ -9,7 +9,7 @@ import argparse
 
 import yaml
 
-from slimserve.core.config import EngineConfig, Precision
+from slimserve.core.config import engine_config_from_dict
 from slimserve.pipeline import benchmark_config
 
 
@@ -21,21 +21,7 @@ def main() -> None:
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
-    engine_cfg = EngineConfig(
-        name=cfg["engine"],
-        model_path=cfg["model_path"],
-        precision=Precision(cfg.get("precision", "fp16")),
-        kv_cache_quant=cfg.get("kv_cache_quant", False),
-        max_num_seqs=cfg.get("max_num_seqs", 256),
-        extra={
-            # TP=2 spans both Kaggle T4s — required for FP16 7B, else it OOMs.
-            "tensor_parallel_size": cfg.get("tensor_parallel_size", 1),
-            "gpu_memory_utilization": cfg.get("gpu_memory_utilization", 0.90),
-            "max_model_len": cfg.get("max_model_len"),
-            "enforce_eager": cfg.get("enforce_eager", False),
-            "quantization": cfg.get("quantization"),
-        },
-    )
+    engine_cfg = engine_config_from_dict(cfg)   # TP=2 spans both T4s for FP16 7B
     result = benchmark_config(
         config_name=cfg["config_name"],
         engine_cfg=engine_cfg,

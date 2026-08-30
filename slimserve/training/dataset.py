@@ -46,3 +46,87 @@ def to_dataset(records: list[dict], tokenizer, max_len: int):
     return Dataset.from_list(
         [tokenize_example(r, tokenizer, max_len) for r in records]
     )
+
+
+# --- Logit-KD helpers -------------------------------------------------------
+# The teacher's soft labels are precomputed offline (build_logits) and stored as
+# top-k logits over the *completion* tokens only. These pure functions are the
+# extraction (build time) and the ragged-padding (collate time) — both GPU-free
+# and unit-tested, so the on-disk alignment can't silently drift from the loss.
+
+def extract_teacher_topk(logits, labels, k: int):
+    """Top-k teacher logits at the supervised (completion) positions.
+
+    ``logits`` [L, V], ``labels`` [L] (list or tensor, -100 on prompt). Uses the
+    same next-token shift as the loss: position i predicts token i+1, so a row is
+    supervised when ``labels[i+1] != -100``. Returns, in left-to-right order:
+    ``vals`` [n, k] fp16 and ``ids`` [n, k] int64 — aligned token-for-token with
+    how the loss re-derives the supervised mask from ``labels``.
+    """
+    import torch
+
+    if not torch.is_tensor(labels):
+        labels = torch.tensor(labels)
+    shift_logits = logits[:-1]                 # [L-1, V]
+    shift_labels = labels[1:]                  # [L-1]
+    supervised = shift_labels != -100
+    vals, ids = shift_logits[supervised].topk(k, dim=-1)   # [n, k]
+    return vals.to(torch.float16), ids.to(torch.long)
+
+
+def pad_teacher_topk(ids_per_example, vals_per_example):
+    """Pad ragged per-example top-k tensors to a dense batch.
+
+    Each example carries ``n`` supervised rows of width ``k`` (``n`` varies with
+    completion length). Returns ``topk_ids`` [B, M, k] long, ``topk_vals`` [B, M, k]
+    float, and ``kd_mask`` [B, M] bool, where M is the longest completion in the
+    batch. Pad rows are zeros; the loss never reads them (it slices the first
+    ``n = supervised.sum()`` rows per example), but kd_mask makes that explicit.
+    """
+    import torch
+
+    B = len(ids_per_example)
+    M = max((len(x) for x in ids_per_example), default=0)
+    k = len(ids_per_example[0][0]) if M else 0
+    topk_ids = torch.zeros(B, M, k, dtype=torch.long)
+    topk_vals = torch.zeros(B, M, k, dtype=torch.float)
+    kd_mask = torch.zeros(B, M, dtype=torch.bool)
+    for b, (ids, vals) in enumerate(zip(ids_per_example, vals_per_example)):
+        n = len(ids)
+        if n == 0:
+            continue
+        topk_ids[b, :n] = torch.as_tensor(ids, dtype=torch.long)
+        topk_vals[b, :n] = torch.as_tensor(vals, dtype=torch.float)
+        kd_mask[b, :n] = True
+    return topk_ids, topk_vals, kd_mask
+
+
+def load_logit_dataset(path: str):
+    """Load the Arrow dataset written by ``build_data --mode logits``."""
+    from datasets import load_from_disk
+
+    return load_from_disk(path)
+
+
+class KDDataCollator:
+    """Pad token fields like DataCollatorForSeq2Seq, plus the ragged teacher top-k.
+
+    Splits the two concerns: the standard collator handles input_ids/attention_mask/
+    labels padding; ``pad_teacher_topk`` (pure, tested) handles the KD tensors.
+    """
+
+    def __init__(self, tokenizer, label_pad_token_id: int = -100):
+        from transformers import DataCollatorForSeq2Seq
+
+        self._base = DataCollatorForSeq2Seq(
+            tokenizer, padding=True, label_pad_token_id=label_pad_token_id)
+
+    def __call__(self, features):
+        ids = [f.pop("kd_topk_ids") for f in features]
+        vals = [f.pop("kd_topk_vals") for f in features]
+        batch = self._base(features)
+        topk_ids, topk_vals, kd_mask = pad_teacher_topk(ids, vals)
+        batch["kd_topk_ids"] = topk_ids
+        batch["kd_topk_vals"] = topk_vals
+        batch["kd_mask"] = kd_mask
+        return batch

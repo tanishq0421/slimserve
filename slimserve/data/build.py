@@ -126,6 +126,8 @@ def build_logits(num: int, teacher_model: str, out_dir: str,
         rows.append({**ex,
                      "kd_topk_ids": top_ids.tolist(),
                      "kd_topk_vals": vals.float().tolist()})
+        if len(rows) % 250 == 0:
+            print(f"  teacher logits: {len(rows)}/{num}", flush=True)
 
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     Dataset.from_list(rows).save_to_disk(out_dir)

@@ -8,8 +8,9 @@ large one at a fraction of the cost. SlimServe takes a 7B teacher, shrinks it to
 a ~1.5B student, and measures **$/1M tokens, throughput, latency, VRAM, and
 tool-calling accuracy** across every configuration.
 
-> **Headline target:** distilled INT4 SLM at **~6–8× lower cost**, **≥~90–95% of
-> teacher tool-calling accuracy**.
+> **Result:** a fine-tuned **1.5B matches the 7B teacher** on tool-calling at **~4.5× lower
+> cost**; a **0.5B** holds ~95% of teacher argument accuracy at **~11× lower cost**. Every number
+> below is measured on held-out data, not projected.
 
 ## Results so far
 
@@ -60,16 +61,49 @@ Measured on Kaggle T4s, single GPU except the FP16 teacher; `$/1M` uses $0.20/hr
 Full write-up, including what these numbers *don't* prove, in
 [`results/FINDINGS.md`](results/FINDINGS.md).
 
-![Phase 1 Week 1 benchmark on Kaggle](docs/images/phase1_week1_benchmark.png)
+## Models & reproduce
+
+The fine-tuned students are published on the Hugging Face Hub:
+
+| model | recipe | tool / arg acc |
+|---|---|---|
+| [`slimserve-student_1p5b_gold`](https://huggingface.co/tanishq0421/slimserve-student_1p5b_gold) | 1.5B, gold SFT | 1.00 / 0.795 |
+| [`slimserve-student_1p5b_distill`](https://huggingface.co/tanishq0421/slimserve-student_1p5b_distill) | 1.5B, sequence KD | 1.00 / 0.790 |
+| [`slimserve-student_0p5b_gold`](https://huggingface.co/tanishq0421/slimserve-student_0p5b_gold) | 0.5B, gold SFT | 0.99 / 0.755 |
+| [`slimserve-student_0p5b_distill`](https://huggingface.co/tanishq0421/slimserve-student_0p5b_distill) | 0.5B, sequence KD | 0.99 / 0.760 |
+
+Reproduce any student end-to-end on a GPU (Kaggle's free 2× T4 is enough):
+
+```bash
+# 1. build training data from xLAM — gold labels + teacher-generated completions
+python -m scripts.build_data --mode gold    --num 5000 --out data/sft_gold.jsonl
+python -m scripts.build_data --mode teacher --num 5000 --out data/teacher_distill.jsonl \
+    --teacher-config configs/teacher_int4_awq.yaml
+
+# 2. QLoRA fine-tune (gold or distill), then merge the LoRA adapter into a standalone model
+python -m scripts.run_train --config configs/train_1p5b_gold.yaml
+python -m scripts.merge_adapter --base Qwen/Qwen2.5-1.5B-Instruct \
+    --adapter checkpoints/student_1p5b_gold_adapter --out checkpoints/student_1p5b_gold
+
+# 3. benchmark on held-out tool calls (tool_acc / arg_acc / $-per-1M / p99)
+python -m scripts.run_benchmark --config configs/student_1p5b_gold.yaml \
+    --model checkpoints/student_1p5b_gold
+```
 
 ## The story in three phases
 
-1. **Serve & benchmark** existing tools — vLLM + INT8/INT4/FP8 quantization + KV-cache
-   compression. Establish the cost baseline.
-2. **Rebuild the internals** from scratch — paged KV cache, continuous batching — to
-   understand what makes serving fast.
-3. **Compress to an SLM** — QLoRA + knowledge distillation (teacher → student), then
-   quantize and serve the student.
+1. ✅ **Serve & benchmark** existing tools — vLLM + INT8/INT4 quantization, measured on real
+   tool-calling accuracy. Established the cost baseline: *quantization is essentially free.*
+2. ⏳ **Rebuild the internals** from scratch — paged KV cache, continuous batching — to
+   understand what makes serving fast. *(planned)*
+3. ✅ **Compress to an SLM** — QLoRA fine-tuning + knowledge distillation (teacher → student).
+   A fine-tuned 1.5B matched the 7B teacher; a 0.5B got ~95% at ~11× lower cost.
+
+Within Phase 3 the distillation story is deliberately incremental, each step testing the next:
+**gold SFT** (train on labels) → **sequence distillation** (train on the teacher's outputs) →
+**logit distillation** (match the teacher's full output distribution). Gold and sequence KD tied
+at both sizes — the teacher's *tokens* carried no signal the labels didn't — so logit KD, which
+uses the teacher's *probabilities*, is the open question and the next step.
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the full spec and
 [`docs/PLAN.md`](docs/PLAN.md) for the week-by-week plan.
@@ -86,13 +120,30 @@ implementations are **Strategies** wired in by name through a
 Design principles: **SOLID** throughout, with **Strategy**, **Adapter**,
 **Factory/Registry**, and **Template Method** patterns where they earn their place.
 
+```mermaid
+flowchart TD
+    CFG["YAML config<br/>engine: vllm · trainer: qlora · evaluator: toolcall"]
+    CFG --> REG["registry.build(kind, name)"]
+    REG --> ENG["InferenceEngine<br/>(ABC)"]
+    REG --> TRN["Trainer<br/>(ABC)"]
+    REG --> EVL["Evaluator<br/>(ABC)"]
+    ENG --> V["VLLMEngine"]
+    ENG --> M["mini_engine · Phase 2"]
+    TRN --> Q["QLoRATrainer"]
+    TRN --> L["LogitKDTrainer · next"]
+    EVL --> TC["ToolCallAccuracyEvaluator"]
+```
+
+A YAML names the components; the registry resolves each name to a concrete **Strategy** behind its
+interface. Adding a backend, trainer, or metric is a new registered class — not a change to any caller.
+
 ```
 slimserve/
 ├── core/          # interfaces (ABCs), typed configs, registry
 ├── engines/       # vLLM / HF adapters + from-scratch mini_engine (Phase 2)
 ├── quantization/  # AWQ / GPTQ / bitsandbytes
 ├── training/      # QLoRA + distillation strategies (Phase 3)
-├── evaluation/    # BFCL tool-calling metrics
+├── evaluation/    # xLAM exact-match tool-calling metrics (tool_acc / arg_acc)
 └── benchmark/     # runner + append-only results store (the hero table)
 ```
 
@@ -108,4 +159,9 @@ The hero benchmark table lives in `results/benchmarks.csv`.
 
 ## Status
 
-Scaffold + spec complete. Implementation follows `docs/PLAN.md`, Phase 1 → 3.
+- ✅ **Phase 1 — serve, quantize, benchmark.** FP16 / INT8 / INT4 teacher, real held-out
+  tool-calling accuracy, cost-vs-quality chart.
+- ✅ **Phase 3 — compress to an SLM.** QLoRA gold SFT + sequence distillation for the 1.5B and
+  0.5B students; merged and served from the Hub; full comparison table above.
+- ⏳ **Next — logit distillation** (match the teacher's output distribution, not just its tokens),
+  then **Phase 2** (from-scratch KV-cache / paged-attention / continuous-batching engine).

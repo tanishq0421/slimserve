@@ -20,6 +20,39 @@ _LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
                  "gate_proj", "up_proj", "down_proj"]
 
 
+def build_training_args(config: TrainConfig):
+    """The TrainingArguments shared by the QLoRA SFT and logit-KD trainers.
+
+    Filtered to the kwargs the installed transformers actually accepts, since the
+    version drifts a lot on Kaggle (transformers 5.0 dropped some older ones).
+    """
+    import inspect
+
+    from transformers import TrainingArguments
+
+    # 8-bit optimizer needs bitsandbytes; plain adamw for the bnb-free fp16 path.
+    optim = "paged_adamw_8bit" if config.load_in_4bit else "adamw_torch"
+    wanted = dict(
+        output_dir=config.output_dir,
+        per_device_train_batch_size=config.extra.get("batch_size", 8),
+        gradient_accumulation_steps=config.extra.get("grad_accum", 2),
+        num_train_epochs=config.epochs,
+        learning_rate=config.lr,
+        warmup_ratio=0.03,
+        lr_scheduler_type="cosine",
+        optim=optim,
+        logging_steps=10,
+        fp16=True,                              # T4 has no bf16
+        gradient_checkpointing=True,            # trade compute for memory
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        seed=config.extra.get("seed", 3407),
+        report_to="none",
+        save_strategy="no",
+    )
+    supported = set(inspect.signature(TrainingArguments.__init__).parameters)
+    return TrainingArguments(**{k: v for k, v in wanted.items() if k in supported})
+
+
 @register("trainer", "qlora")
 class QLoRATrainer(BaseTrainer):
     def load_model(self, config: TrainConfig):
@@ -72,33 +105,9 @@ class QLoRATrainer(BaseTrainer):
         return to_dataset(load_records(config.dataset), tokenizer, max_len)
 
     def build_trainer(self, model, tokenizer, dataset, config: TrainConfig):
-        import inspect
+        from transformers import DataCollatorForSeq2Seq, Trainer
 
-        from transformers import (DataCollatorForSeq2Seq, Trainer,
-                                   TrainingArguments)
-
-        # 8-bit optimizer needs bitsandbytes; plain adamw for the bnb-free fp16 path.
-        optim = "paged_adamw_8bit" if config.load_in_4bit else "adamw_torch"
-        wanted = dict(
-            output_dir=config.output_dir,
-            per_device_train_batch_size=config.extra.get("batch_size", 8),
-            gradient_accumulation_steps=config.extra.get("grad_accum", 2),
-            num_train_epochs=config.epochs,
-            learning_rate=config.lr,
-            warmup_ratio=0.03,
-            lr_scheduler_type="cosine",
-            optim=optim,
-            logging_steps=10,
-            fp16=True,                              # T4 has no bf16
-            gradient_checkpointing=True,            # trade compute for memory
-            gradient_checkpointing_kwargs={"use_reentrant": False},
-            seed=config.extra.get("seed", 3407),
-            report_to="none",
-            save_strategy="no",
-        )
-        # Pass only args this installed transformers accepts (versions drift a lot).
-        supported = set(inspect.signature(TrainingArguments.__init__).parameters)
-        args = TrainingArguments(**{k: v for k, v in wanted.items() if k in supported})
+        args = build_training_args(config)
         collator = DataCollatorForSeq2Seq(
             tokenizer, padding=True, label_pad_token_id=-100)
         return Trainer(model=model, args=args, train_dataset=dataset,

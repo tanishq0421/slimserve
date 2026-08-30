@@ -13,6 +13,7 @@ import argparse
 
 import yaml
 
+import slimserve.training.logit_kd_trainer  # noqa: F401  side-effect: register "logit_kd"
 import slimserve.training.qlora_trainer  # noqa: F401  side-effect: register "qlora"
 from slimserve.core.config import train_config_from_dict
 from slimserve.core.registry import build

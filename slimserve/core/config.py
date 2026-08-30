@@ -107,7 +107,8 @@ def engine_config_from_dict(cfg: dict) -> EngineConfig:
 
 def train_config_from_dict(cfg: dict) -> TrainConfig:
     """Build a TrainConfig from a parsed YAML dict (used by the training CLI)."""
-    knobs = ("max_seq_len", "batch_size", "grad_accum", "seed")
+    knobs = ("max_seq_len", "batch_size", "grad_accum", "seed",
+             "temperature", "alpha", "teacher_model")   # last three: logit KD
     return TrainConfig(
         base_model=cfg["base_model"],
         dataset=cfg["dataset"],

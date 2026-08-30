@@ -8,6 +8,11 @@
         --teacher-config configs/teacher_int4_awq.yaml \
         --num 10000 --out data/teacher_distill.jsonl
 
+    # logit-KD set (runs the teacher via a plain HF forward, stores top-k logits):
+    python -m scripts.build_data --mode logits \
+        --teacher-model Qwen/Qwen2.5-7B-Instruct \
+        --num 10000 --top-k 50 --out data/teacher_logits/
+
 The INT4 teacher is a fine generator: same tool accuracy as FP16, single T4, faster.
 """
 from __future__ import annotations
@@ -21,10 +26,13 @@ from slimserve.data.build import build_gold, build_teacher
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--mode", choices=["gold", "teacher"], required=True)
+    p.add_argument("--mode", choices=["gold", "teacher", "logits"], required=True)
     p.add_argument("--num", type=int, default=10000)
     p.add_argument("--out", required=True)
     p.add_argument("--teacher-config", help="engine YAML (teacher mode only)")
+    p.add_argument("--teacher-model", help="HF model id (logits mode only)")
+    p.add_argument("--top-k", type=int, default=50,
+                   help="teacher top-k logits to store per token (logits mode)")
     p.add_argument("--keep-all", action="store_true",
                    help="teacher mode: keep even wrong-tool completions")
     p.add_argument("--tensor-parallel", type=int, default=None,
@@ -33,6 +41,11 @@ def main() -> None:
 
     if args.mode == "gold":
         n = build_gold(args.num, args.out)
+    elif args.mode == "logits":
+        if not args.teacher_model:
+            p.error("--teacher-model is required for logits mode")
+        from slimserve.data.build import build_logits
+        n = build_logits(args.num, args.teacher_model, args.out, top_k=args.top_k)
     else:
         if not args.teacher_config:
             p.error("--teacher-config is required for teacher mode")

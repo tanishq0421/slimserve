@@ -26,7 +26,9 @@ Live table in [`results/benchmarks.csv`](results/benchmarks.csv); per-run notes 
 | student_1p5b_base | 1.5B | fp16 (off-the-shelf) | 0.985 | 0.770 | 1470.3 | 670 | 0.0378 |
 | **student_1p5b_gold** | 1.5B | fp16 (fine-tuned, SFT) | **1.000** | **0.795** | 1465.1 | 667 | 0.0379 |
 | **student_1p5b_distill** | 1.5B | fp16 (distilled) | **1.000** | 0.790 | 1429.9 | 677 | 0.0389 |
-| student_0p5b_base | 0.5B | fp16 (off-the-shelf) | 0.975 | 0.715 | 3373.0 | 270 | **0.0165** |
+| student_0p5b_base | 0.5B | fp16 (off-the-shelf) | 0.975 | 0.715 | 3373.0 | 270 | 0.0165 |
+| **student_0p5b_gold** | 0.5B | fp16 (fine-tuned, SFT) | 0.990 | 0.755 | 3431.3 | 270 | **0.0162** |
+| **student_0p5b_distill** | 0.5B | fp16 (distilled) | 0.990 | 0.760 | 3378.0 | 269 | **0.0164** |
 
 <sub>Accuracy = tool-calling on 200 held-out xLAM examples: `tool_acc` = right tool,
 `arg_acc` = right tool **and** right arguments (strict exact-match, so a floor). ±1–2 pts is
@@ -46,9 +48,14 @@ Measured on Kaggle T4s, single GPU except the FP16 teacher; `$/1M` uses $0.20/hr
   accuracy on the smallest model (0.715). This is the "SLM-first agents" result on our own numbers.
 - **Fine-tuning closes the gap — a 1.5B matches the 7B teacher.** QLoRA lifted the 1.5B from
   0.985/0.770 to **1.00 tool / 0.795 arg**, landing right at the teacher (0.99 / 0.795) at
-  **~4.5× lower cost** and lower latency. And a tested-not-assumed finding: **distillation did not
-  beat plain SFT** (gold 0.795 vs distill 0.790) — because the base student was already near the
-  teacher, its answers weren't a richer signal than the ground-truth labels.
+  **~4.5× lower cost** and lower latency. The 0.5B improved too — 0.975/0.715 → **0.99 / ~0.76**
+  (+4 arg pts) at **~10× lower cost** — but plateaued below the teacher: a **capacity ceiling**, not
+  a recipe problem (the 1.5B had the room to reach 0.795, the 0.5B didn't).
+- **Distillation did not beat plain SFT — at either size** (1.5B: gold 0.795 vs distill 0.790;
+  0.5B: gold 0.755 vs distill 0.760 — both ties). Tested, not assumed. Sequence-level distillation
+  copies the teacher's *output tokens*, which on this narrow single-call task are ~the same as the
+  gold labels; without the teacher's *logits* (logit KD) there's no richer signal to transfer. Gold
+  SFT is the simpler, equal-or-better default here.
 
 Full write-up, including what these numbers *don't* prove, in
 [`results/FINDINGS.md`](results/FINDINGS.md).

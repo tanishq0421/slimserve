@@ -18,15 +18,16 @@ import pandas as pd              # noqa: E402
 CSV = "results/benchmarks.csv"
 OUT = "results/charts/phase1_cost_vs_quality.png"
 
-# fixed order: 7B teacher variants, the 1.5B trio (base -> fine-tuned), then 0.5B
+# fixed order: 7B teacher variants, then each student as a trio (base -> fine-tuned)
 ORDER = ["teacher_fp16", "teacher_int8", "teacher_int4_awq",
          "student_1p5b_base", "student_1p5b_gold", "student_1p5b_distill",
-         "student_0p5b_base"]
+         "student_0p5b_base", "student_0p5b_gold", "student_0p5b_distill"]
 LABELS = {
     "teacher_fp16": "7B\nfp16", "teacher_int8": "7B\nint8",
     "teacher_int4_awq": "7B\nint4", "student_1p5b_base": "1.5B\nbase",
     "student_1p5b_gold": "1.5B\ngold", "student_1p5b_distill": "1.5B\ndistil",
-    "student_0p5b_base": "0.5B\nbase",
+    "student_0p5b_base": "0.5B\nbase", "student_0p5b_gold": "0.5B\ngold",
+    "student_0p5b_distill": "0.5B\ndistil",
 }
 BLUE, ORANGE, GREEN = "#0072B2", "#E69F00", "#009E73"
 
@@ -36,7 +37,7 @@ def main() -> None:
     x = range(len(ORDER))
     xlabels = [LABELS[c] for c in ORDER]
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.0))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 4.0))
 
     # --- Panel 1: cost ---
     bars = ax1.bar(x, df["cost_per_1m_tokens"].values, color=GREEN, width=0.66, zorder=3)

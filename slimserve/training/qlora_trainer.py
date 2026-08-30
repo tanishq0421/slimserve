@@ -20,11 +20,15 @@ _LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
                  "gate_proj", "up_proj", "down_proj"]
 
 
-def build_training_args(config: TrainConfig):
+def build_training_args(config: TrainConfig, *, remove_unused_columns: bool = True):
     """The TrainingArguments shared by the QLoRA SFT and logit-KD trainers.
 
     Filtered to the kwargs the installed transformers actually accepts, since the
     version drifts a lot on Kaggle (transformers 5.0 dropped some older ones).
+
+    ``remove_unused_columns`` defaults to True (plain SFT); the logit-KD trainer
+    passes False so the Trainer doesn't strip the teacher-logit columns (which
+    aren't model-forward args) before they reach the collator.
     """
     import inspect
 
@@ -48,6 +52,7 @@ def build_training_args(config: TrainConfig):
         seed=config.extra.get("seed", 3407),
         report_to="none",
         save_strategy="no",
+        remove_unused_columns=remove_unused_columns,
     )
     supported = set(inspect.signature(TrainingArguments.__init__).parameters)
     return TrainingArguments(**{k: v for k, v in wanted.items() if k in supported})

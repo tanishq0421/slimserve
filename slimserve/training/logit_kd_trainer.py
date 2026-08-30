@@ -53,6 +53,8 @@ class LogitKDTrainer(QLoRATrainer):
                     teacher, distill)
                 return (loss, outputs) if return_outputs else loss
 
-        args = build_training_args(config)
+        # Keep the teacher-logit columns: the Trainer would otherwise drop any
+        # column that isn't a model-forward arg before the collator sees it.
+        args = build_training_args(config, remove_unused_columns=False)
         return _KDTrainer(model=model, args=args, train_dataset=dataset,
                           data_collator=KDDataCollator(tokenizer))

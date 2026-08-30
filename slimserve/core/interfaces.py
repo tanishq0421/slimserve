@@ -61,7 +61,11 @@ class Quantizer(ABC):
 
 
 class KVCache(ABC):
-    """Phase-2 teaching abstraction: how key/value tensors are stored.
+    """Phase-2 teaching abstraction: how per-layer key/value tensors are stored.
+
+    A transformer keeps a separate K/V cache per layer, so ``append`` is indexed
+    by layer and returns the full cached K/V for that sequence+layer so far (the
+    same shape of contract as HF's ``Cache.update``).
 
     Implementations: ContiguousKVCache (naive), PagedKVCache (blocked).
     """
@@ -71,7 +75,9 @@ class KVCache(ABC):
         ...
 
     @abstractmethod
-    def append(self, seq_id: int, key, value) -> None:
+    def append(self, seq_id: int, layer: int, key, value):
+        """Append this step's key/value for one layer; return the full (keys,
+        values) cached for that sequence+layer, including what was just added."""
         ...
 
     @abstractmethod

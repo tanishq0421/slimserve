@@ -72,18 +72,26 @@ class MiniQwen:
         reps = self.n_heads // self.n_kv
         return x[:, :, None, :, :].expand(b, kv, reps, t, d).reshape(b, kv * reps, t, d)
 
-    def _attention(self, q, k, v):
-        """Causal scaled-dot-product attention (full sequence). q,k,v: [B,H,T,d]."""
+    def _attention(self, q, k, v, start: int = 0):
+        """Scaled-dot-product attention with a causal mask over cached + new keys.
+
+        q: [B,H,T,d]; k,v: [B,H,S,d] where S is the total cached length (>= T). A
+        query at new-token index i (absolute position ``start + i``) may attend to
+        key j iff ``j <= start + i``. With no cache (start=0, S=T) this is the
+        plain lower-triangular causal mask; on a decode step (T=1) nothing is
+        masked (the one query sees all past keys and itself).
+        """
         import torch
 
-        scores = (q @ k.transpose(-2, -1)) / (self.head_dim ** 0.5)   # [B,H,T,T]
-        t = scores.shape[-1]
-        mask = torch.triu(torch.full((t, t), float("-inf"), device=q.device), diagonal=1)
-        scores = scores + mask                                        # causal
+        scores = (q @ k.transpose(-2, -1)) / (self.head_dim ** 0.5)   # [B,H,T,S]
+        t, s = scores.shape[-2], scores.shape[-1]
+        i = torch.arange(t, device=q.device).unsqueeze(1)            # query rows
+        j = torch.arange(s, device=q.device).unsqueeze(0)            # key cols
+        scores = scores.masked_fill(j > (start + i), float("-inf"))
         weights = torch.softmax(scores.float(), dim=-1).to(q.dtype)
         return weights @ v                                           # [B,H,T,d]
 
-    def _decoder_layer(self, layer, h, cos, sin):
+    def _decoder_layer(self, layer, idx, h, cos, sin, cache, seq_id, start):
         b, t, _ = h.shape
         residual = h
         x = layer.input_layernorm(h)
@@ -93,7 +101,13 @@ class MiniQwen:
         v = attn.v_proj(x).view(b, t, self.n_kv, self.head_dim).transpose(1, 2)
         q = self._apply_rope(q, cos, sin)
         k = self._apply_rope(k, cos, sin)
-        out = self._attention(q, self._repeat_kv(k), self._repeat_kv(v))
+        if cache is not None:                       # single-sequence decode path
+            k1 = k[0].transpose(0, 1)               # [T, n_kv, d]
+            v1 = v[0].transpose(0, 1)
+            full_k, full_v = cache.append(seq_id, idx, k1, v1)      # [S, n_kv, d]
+            k = full_k.transpose(0, 1).unsqueeze(0)                 # [1, n_kv, S, d]
+            v = full_v.transpose(0, 1).unsqueeze(0)
+        out = self._attention(q, self._repeat_kv(k), self._repeat_kv(v), start=start)
         out = out.transpose(1, 2).reshape(b, t, self.n_heads * self.head_dim)
         h = residual + attn.o_proj(out)
         residual = h
@@ -101,16 +115,22 @@ class MiniQwen:
         return h
 
     # --- public forward -----------------------------------------------------
-    def forward(self, input_ids):
-        """Full-sequence forward. input_ids: [B, T] -> logits [B, T, vocab]."""
+    def forward(self, input_ids, cache=None, seq_id: int = 0, start_pos: int = 0):
+        """input_ids: [B, T] -> logits [B, T, vocab].
+
+        With ``cache=None`` this is a plain full-sequence forward (B may be >1).
+        With a ``cache`` it's the incremental path (B must be 1): keys/values are
+        appended at ``start_pos`` and attention runs over the whole cached prefix.
+        """
         import torch
 
         model = self.hf.model
         with torch.no_grad():
             h = model.embed_tokens(input_ids)
-            positions = torch.arange(input_ids.shape[1], device=self.device)
+            positions = torch.arange(start_pos, start_pos + input_ids.shape[1],
+                                     device=self.device)
             cos, sin = self._rope(positions)
-            for layer in model.layers:
-                h = self._decoder_layer(layer, h, cos, sin)
+            for idx, layer in enumerate(model.layers):
+                h = self._decoder_layer(layer, idx, h, cos, sin, cache, seq_id, start_pos)
             h = model.norm(h)
             return self.hf.lm_head(h)

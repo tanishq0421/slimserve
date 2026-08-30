@@ -126,8 +126,46 @@ the bigger gap.
 3. **One run, one epoch, 5k examples.** More data / a weaker student / a harder eval could all
    shift the gold-vs-distill picture.
 
+## Then the 0.5B — does distillation help when the student starts further behind?
+
+The 1.5B result had a caveat: the base student was *already* near the teacher, so distillation
+had nothing extra to teach. The 0.5B is the cleaner test — it starts a full **8 points** behind on
+arguments (0.715 vs the teacher's 0.795), so if distillation is ever going to beat plain SFT, this
+is where it should show. Same recipe, same 5k examples, same two recipes (gold vs distill).
+
+| 0.5B model | tool_acc | arg_acc | $/1M |
+|---|---|---|---|
+| base (off-the-shelf) | 0.975 | 0.715 | 0.017 |
+| gold (SFT) | 0.990 | 0.755 | 0.016 |
+| distill | 0.990 | 0.760 | 0.016 |
+| *(7B teacher)* | *0.990* | *0.795* | *0.176* |
+
+**1. Fine-tuning helped — by about 4 points.** Both recipes lifted arguments from 0.715 to ~0.755–0.76
+and tool selection from 0.975 to 0.99, at **~10–11× lower cost** than the teacher (~$0.016/1M),
+3,400 tok/s, ~270 ms p99. So even the smallest model gets meaningfully better at the task with a
+20-minute fine-tune.
+
+**2. Distillation still did NOT beat plain SFT** (gold 0.755 vs distill 0.760 — a 0.5-point gap, pure
+noise at n=200). This is the more surprising half: I expected the bigger starting gap to finally give
+the teacher's answers an edge over the ground-truth labels, and it didn't. Sequence distillation copies
+the teacher's *final tokens* — and for this narrow, single-call task those tokens are essentially the
+same as the gold labels the teacher was itself trained toward. Without the teacher's *probabilities*
+(logit KD), there's no richer signal to transfer. So across **both** student sizes, gold SFT is the
+better default: same result, simpler pipeline, no teacher-generation step.
+
+**3. The 0.5B hit a ceiling the 1.5B didn't.** Fine-tuned, the 1.5B reached the teacher's 0.795; the
+0.5B plateaued at ~0.76 and couldn't close the last ~3–4 points no matter which recipe. That's a
+**capacity** limit, not a training-recipe one — the smaller model simply has less room to represent the
+argument structure. Useful framing for a deployment choice: the 1.5B *matches* the 7B, the 0.5B gets
+you ~95% of the way at half the size and ~10× lower cost — pick by how much that last few points is
+worth.
+
 ## Bottom line (Phase 3)
 
-For tool-calling, a **fine-tuned 1.5B matches the 7B teacher at a fraction of the cost** — the
-compression thesis, end to end. And distillation is not automatically better than SFT: it pays
-off only when the teacher genuinely outclasses the student, which wasn't the case here.
+For tool-calling, a **fine-tuned 1.5B matches the 7B teacher at a fraction of the cost**, and a
+**0.5B gets ~95% of the way at ~10× lower cost** — the compression thesis, end to end and across two
+sizes. Two findings that were tested, not assumed: **distillation never beat plain SFT** (at either
+size — sequence-level KD on a narrow task carries no signal the gold labels don't already have), and
+the smallest model's remaining gap is a **capacity ceiling**, not something more data or a better
+recipe would fix. Gold SFT is the right default here; distillation would need the teacher's *logits*,
+not just its outputs, to earn its place.

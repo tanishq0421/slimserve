@@ -87,7 +87,9 @@ def pad_teacher_topk(ids_per_example, vals_per_example):
 
     B = len(ids_per_example)
     M = max((len(x) for x in ids_per_example), default=0)
-    k = len(ids_per_example[0][0]) if M else 0
+    # k = width of a top-k row. Read it from the first NON-EMPTY example, since an
+    # example can have zero supervised rows (its completion was truncated away).
+    k = next((len(ex[0]) for ex in ids_per_example if ex), 0)
     topk_ids = torch.zeros(B, M, k, dtype=torch.long)
     topk_vals = torch.zeros(B, M, k, dtype=torch.float)
     kd_mask = torch.zeros(B, M, dtype=torch.bool)
@@ -102,10 +104,16 @@ def pad_teacher_topk(ids_per_example, vals_per_example):
 
 
 def load_logit_dataset(path: str):
-    """Load the Arrow dataset written by ``build_data --mode logits``."""
+    """Load the Arrow dataset written by ``build_data --mode logits``.
+
+    Drops examples whose completion was truncated to nothing (no supervised
+    tokens -> empty top-k): they carry no CE or KD signal and would only add
+    empty batches.
+    """
     from datasets import load_from_disk
 
-    return load_from_disk(path)
+    ds = load_from_disk(path)
+    return ds.filter(lambda ex: len(ex["kd_topk_ids"]) > 0)
 
 
 class KDDataCollator:

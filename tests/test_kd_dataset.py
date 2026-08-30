@@ -45,6 +45,17 @@ def test_pad_ragged_completions():
     assert torch.allclose(topk_vals[0], torch.tensor([[5.0, 4.0], [9.0, 7.0]]))
 
 
+def test_pad_handles_empty_first_example():
+    # An example with zero supervised rows (truncated completion) must not crash
+    # padding, even when it lands first in the batch.
+    ids = [[], [[1, 2], [3, 4]]]
+    vals = [[], [[5.0, 4.0], [9.0, 7.0]]]
+    topk_ids, topk_vals, kd_mask = pad_teacher_topk(ids, vals)
+    assert topk_ids.shape == (2, 2, 2)              # k inferred from the 2nd example
+    assert kd_mask.tolist() == [[False, False], [True, True]]
+    assert topk_ids[1, 0].tolist() == [1, 2]
+
+
 def test_extract_and_pad_roundtrip_aligns_with_loss_mask():
     # The count of supervised rows from extract must equal labels' supervised count,
     # so the loss (which re-derives it) lines up with the stored rows.

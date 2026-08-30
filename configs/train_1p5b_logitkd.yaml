@@ -1,0 +1,18 @@
+# Phase 3 (Wk7 stretch) — LOGIT KD of the 1.5B student against cached teacher logits.
+# Unlike sequence distillation (train on the teacher's output *tokens*), this matches
+# the teacher's full output *distribution* — the one signal gold/sequence KD lacked.
+trainer: logit_kd
+base_model: Qwen/Qwen2.5-1.5B-Instruct
+dataset: data/teacher_logits        # Arrow dir from: build_data --mode logits
+output_dir: checkpoints/student_1p5b_logitkd
+lora_r: 16
+lora_alpha: 32
+epochs: 1
+lr: 2.0e-4
+load_in_4bit: true          # QLoRA: 4-bit frozen base + LoRA adapters
+max_seq_len: 2048
+batch_size: 2          # small per-step batch to fit a 16GB T4...
+grad_accum: 8          # ...but effective batch stays 16
+temperature: 2.0       # softens both distributions before the KL (-> extra)
+alpha: 0.5             # 0 = pure CE, 1 = pure KD; 0.5 blends them (-> extra)
+teacher_model: Qwen/Qwen2.5-7B-Instruct   # provenance only (not loaded at train time)

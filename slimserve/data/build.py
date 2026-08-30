@@ -80,7 +80,7 @@ def build_teacher(num: int, engine: InferenceEngine, out_path: str,
 
 
 def build_logits(num: int, teacher_model: str, out_dir: str,
-                 top_k: int = 50, max_len: int = 2048) -> int:
+                 top_k: int = 50, max_len: int = 2048, start: int = 0) -> int:
     """Precompute the teacher's top-k logits for logit KD (offline, run once).
 
     Targets are the gold tool calls; for each we run the teacher forward and store
@@ -112,7 +112,7 @@ def build_logits(num: int, teacher_model: str, out_dir: str,
     # One example at a time (batch=1) — no padding, so the top-k rows line up with
     # the labels exactly. Could be batched for speed; kept simple and correct.
     rows: list[dict] = []
-    for query, tools, gold in training_examples(num):
+    for query, tools, gold in training_examples(num, start=start):
         record = {
             "query": query,
             "tools": xlam_tools_to_openai(tools),

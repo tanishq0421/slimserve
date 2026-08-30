@@ -12,11 +12,14 @@ DATASET = "Salesforce/xlam-function-calling-60k"
 EVAL_HELDOUT = 200   # must match the evaluator's held-out tail
 
 
-def training_examples(num: int, split: str = "train") -> list[tuple[str, list, dict]]:
+def training_examples(num: int, split: str = "train",
+                      start: int = 0) -> list[tuple[str, list, dict]]:
     """Single-tool-call examples from the FRONT of the dataset.
 
     Returns a list of (query, tools, gold_answer). Stops before the held-out eval
-    tail so training and evaluation never share examples.
+    tail so training and evaluation never share examples. ``start`` skips the first
+    ``start`` collected examples, so two workers can take disjoint shards
+    (start=0 and start=num) to split a build across both GPUs without overlap.
     """
     from datasets import load_dataset
 
@@ -33,6 +36,6 @@ def training_examples(num: int, split: str = "train") -> list[tuple[str, list, d
         if len(answers) != 1:                  # keep the target clean: one call
             continue
         out.append((row["query"], tools, answers[0]))
-        if len(out) >= num:
+        if len(out) >= start + num:
             break
-    return out
+    return out[start:start + num]

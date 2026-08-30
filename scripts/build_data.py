@@ -33,6 +33,8 @@ def main() -> None:
     p.add_argument("--teacher-model", help="HF model id (logits mode only)")
     p.add_argument("--top-k", type=int, default=50,
                    help="teacher top-k logits to store per token (logits mode)")
+    p.add_argument("--start", type=int, default=0,
+                   help="skip the first N examples (logits mode: shard across GPUs)")
     p.add_argument("--keep-all", action="store_true",
                    help="teacher mode: keep even wrong-tool completions")
     p.add_argument("--tensor-parallel", type=int, default=None,
@@ -45,7 +47,8 @@ def main() -> None:
         if not args.teacher_model:
             p.error("--teacher-model is required for logits mode")
         from slimserve.data.build import build_logits
-        n = build_logits(args.num, args.teacher_model, args.out, top_k=args.top_k)
+        n = build_logits(args.num, args.teacher_model, args.out,
+                         top_k=args.top_k, start=args.start)
     else:
         if not args.teacher_config:
             p.error("--teacher-config is required for teacher mode")

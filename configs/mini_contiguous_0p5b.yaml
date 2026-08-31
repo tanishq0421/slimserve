@@ -9,8 +9,8 @@ model_path: Qwen/Qwen2.5-0.5B-Instruct
 precision: fp16
 device: cuda
 kv_cache: contiguous
-max_num_seqs: 32
-max_model_len: 1024
+max_num_seqs: 16
+max_model_len: 2048
 params_b: 0.5
 gpu_hourly_usd: 0.20
 evaluator: toolcall

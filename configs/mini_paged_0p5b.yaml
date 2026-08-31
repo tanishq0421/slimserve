@@ -9,9 +9,9 @@ precision: fp16
 device: cuda
 kv_cache: paged
 block_size: 16
-num_blocks: 2048        # 32 concurrent seqs x up to ~64 blocks each
-max_num_seqs: 32
-max_model_len: 1024
+num_blocks: 2048        # 16 concurrent seqs x up to 128 blocks each
+max_num_seqs: 16
+max_model_len: 2048
 params_b: 0.5
 gpu_hourly_usd: 0.20
 evaluator: toolcall

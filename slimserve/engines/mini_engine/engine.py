@@ -80,15 +80,23 @@ class MiniEngine(InferenceEngine):
         probs = torch.softmax(logits / temperature, dim=-1)
         return int(torch.multinomial(probs, num_samples=1))
 
+    def _prep_ids(self, request: GenerationRequest):
+        """Tokenize the tool-formatted prompt, truncated so prompt + generation fit
+        the cache (the contiguous cache is sized to max_model_len; overflowing it
+        would error). Long prompts lose their tail rather than crash the run."""
+        prompt = self._format(request)
+        ids = self._tokenizer(prompt, return_tensors="pt",
+                              add_special_tokens=False).input_ids.to(self._device)
+        budget = max(1, self._max_len - request.max_tokens)
+        return ids[:, :budget]
+
     # --- inference ----------------------------------------------------------
     def generate(self, request: GenerationRequest) -> GenerationOutput:
         self._ensure_loaded()
         import torch
 
         t0 = time.perf_counter()
-        prompt = self._format(request)
-        ids = self._tokenizer(prompt, return_tensors="pt",
-                              add_special_tokens=False).input_ids.to(self._device)
+        ids = self._prep_ids(request)
         n_prompt = ids.shape[1]
 
         model = self._model
@@ -145,8 +153,7 @@ class MiniEngine(InferenceEngine):
         state: dict[int, dict] = {}
         for r in reqs:
             sid = scheduler.admit(r)
-            ids = self._tokenizer(self._format(r), return_tensors="pt",
-                                  add_special_tokens=False).input_ids.to(self._device)
+            ids = self._prep_ids(r)
             state[sid] = {"ids": ids, "n_prompt": ids.shape[1], "req": r,
                           "gen": [], "pos": 0, "next": None}
         order = list(state.keys())                        # return in request order

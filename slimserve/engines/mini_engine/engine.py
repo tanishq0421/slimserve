@@ -23,7 +23,7 @@ from slimserve.core.config import (
 )
 from slimserve.core.interfaces import InferenceEngine
 from slimserve.core.registry import register
-from slimserve.engines.mini_engine.kv_cache import ContiguousKVCache
+from slimserve.engines.mini_engine.kv_cache import ContiguousKVCache, PagedKVCache
 from slimserve.engines.mini_engine.model import MiniQwen
 
 
@@ -48,8 +48,23 @@ class MiniEngine(InferenceEngine):
                                          and cfg.precision is Precision.FP16)
                        else torch.float32)
         self._max_len = int(cfg.extra.get("max_model_len") or 2048)
+        self._kv_kind = cfg.extra.get("kv_cache", "contiguous")
         self._tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
         self._model = MiniQwen(cfg.model_path, dtype=self._dtype, device=self._device)
+
+    def _make_cache(self):
+        """Contiguous (naive) or paged KV cache, selected by ``kv_cache`` in config."""
+        import math
+
+        m = self._model
+        if self._kv_kind == "paged":
+            block_size = int(self.config.extra.get("block_size", 16))
+            num_blocks = int(self.config.extra.get(
+                "num_blocks", math.ceil(self._max_len / block_size) + 1))
+            return PagedKVCache(block_size, num_blocks, m.n_layers, m.n_kv,
+                                m.head_dim, self._device, self._dtype)
+        return ContiguousKVCache(m.n_layers, self._max_len, m.n_kv,
+                                 m.head_dim, self._device, self._dtype)
 
     def _format(self, request: GenerationRequest) -> str:
         messages = [{"role": "user", "content": request.prompt}]
@@ -77,8 +92,7 @@ class MiniEngine(InferenceEngine):
         n_prompt = ids.shape[1]
 
         model = self._model
-        cache = ContiguousKVCache(model.n_layers, self._max_len, model.n_kv,
-                                  model.head_dim, self._device, self._dtype)
+        cache = self._make_cache()
         cache.allocate(seq_id=0, num_tokens=n_prompt)
 
         # prefill: run the whole prompt, fill the cache, sample the first token

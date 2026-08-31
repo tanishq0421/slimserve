@@ -34,7 +34,62 @@ def test_cache_returns_growing_prefix():
     assert torch.allclose(fk[1], torch.tensor([[2.0, 2.0]]))
 
 
+def test_paged_returns_same_kv_as_contiguous():
+    # Feed the identical (layer, key, value) sequence to both caches; the full
+    # prefix they return must match at every step — the paged block gather is
+    # equivalent to the contiguous slice.
+    from slimserve.engines.mini_engine.kv_cache import PagedKVCache
+
+    torch.manual_seed(0)
+    n_layers, n_kv, hd = 3, 2, 4
+    cont = ContiguousKVCache(n_layers, 32, n_kv, hd, "cpu", torch.float32)
+    paged = PagedKVCache(block_size=4, num_blocks=16, n_layers=n_layers,
+                         n_kv_heads=n_kv, head_dim=hd, device="cpu", dtype=torch.float32)
+    cont.allocate(0, 6)
+    paged.allocate(0, 6)
+    for n in (6, 1, 1, 1, 1):                     # prefill 6, then 4 decode steps
+        for layer in range(n_layers):
+            k = torch.randn(n, n_kv, hd)
+            v = torch.randn(n, n_kv, hd)
+            ck, cv = cont.append(0, layer, k, v)
+            pk, pv = paged.append(0, layer, k, v)
+            assert torch.allclose(ck, pk)
+            assert torch.allclose(cv, pv)
+    # both hold 10 live tokens; paged packs tighter, so its utilization is higher
+    assert paged.utilization() >= cont.utilization()
+
+
 import pytest
+
+
+@pytest.mark.slow
+def test_paged_decode_equals_contiguous_decode():
+    from transformers import AutoTokenizer
+
+    from slimserve.engines.mini_engine.kv_cache import PagedKVCache
+    from slimserve.engines.mini_engine.model import MiniQwen
+
+    mini = MiniQwen(MODEL, dtype=torch.float32, device="cpu")
+    tok = AutoTokenizer.from_pretrained(MODEL)
+    ids = tok("The capital of France is", return_tensors="pt").input_ids
+    n_prompt = ids.shape[1]
+
+    def greedy(cache):
+        cache.allocate(0, n_prompt)
+        logits = mini.forward(ids, cache=cache, seq_id=0, start_pos=0)
+        out, tok_id = [], int(logits[0, -1].argmax())
+        for step in range(20):
+            out.append(tok_id)
+            logits = mini.forward(torch.tensor([[tok_id]]), cache=cache,
+                                  seq_id=0, start_pos=n_prompt + step)
+            tok_id = int(logits[0, -1].argmax())
+        return out
+
+    contiguous = greedy(ContiguousKVCache(mini.n_layers, 128, mini.n_kv,
+                                          mini.head_dim, "cpu", torch.float32))
+    paged = greedy(PagedKVCache(8, 32, mini.n_layers, mini.n_kv,
+                                mini.head_dim, "cpu", torch.float32))
+    assert contiguous == paged
 
 
 @pytest.mark.slow

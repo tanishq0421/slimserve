@@ -1,0 +1,19 @@
+# Quantization sweep — the fine-tuned 1.5B gold student served in 4-bit (NF4, the
+# same scheme QLoRA used), quantized in-flight by vLLM. Question: does INT4 stay
+# "free" for a small fine-tuned model the way it did for the 7B teacher, or does a
+# less-redundant small model lose accuracy?
+config_name: student_1p5b_gold_int4
+engine: vllm
+model_path: tanishq0421/slimserve-student_1p5b_gold
+precision: int4
+quantization: bitsandbytes
+load_format: bitsandbytes
+kv_cache_quant: false
+max_num_seqs: 256
+tensor_parallel_size: 1
+gpu_memory_utilization: 0.90
+max_model_len: 8192
+params_b: 1.5
+gpu_hourly_usd: 0.20
+evaluator: toolcall
+eval_samples: 200

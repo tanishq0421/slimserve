@@ -73,7 +73,7 @@ class VLLMEngine(InferenceEngine):
         enforce_eager = bool(cfg.extra.get("enforce_eager", False))
 
         self._tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
-        self._llm = LLM(
+        llm_kwargs = dict(
             model=cfg.model_path,
             tensor_parallel_size=tp,          # TP=2 spans both Kaggle T4s for FP16 7B
             dtype=dtype,
@@ -85,6 +85,12 @@ class VLLMEngine(InferenceEngine):
             enforce_eager=enforce_eager,
             trust_remote_code=True,
         )
+        # bitsandbytes in-flight quantization of an un-quantized checkpoint needs
+        # load_format="bitsandbytes" (quantizes NF4 at load — no pre-quant step).
+        load_format = cfg.extra.get("load_format")
+        if load_format:
+            llm_kwargs["load_format"] = load_format
+        self._llm = LLM(**llm_kwargs)
 
     def _format(self, request: GenerationRequest) -> str:
         messages = [{"role": "user", "content": request.prompt}]

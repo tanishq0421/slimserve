@@ -95,6 +95,7 @@ def engine_config_from_dict(cfg: dict) -> EngineConfig:
         "max_model_len": cfg.get("max_model_len"),
         "enforce_eager": cfg.get("enforce_eager", False),
         "quantization": cfg.get("quantization"),
+        "load_format": cfg.get("load_format"),
     }
     # Mini-engine (Phase 2) knobs — only added when present, so vLLM configs are
     # untouched and the mini engine's own defaults still apply when omitted.

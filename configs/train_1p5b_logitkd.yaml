@@ -16,3 +16,4 @@ grad_accum: 8          # ...but effective batch stays 16
 temperature: 2.0       # softens both distributions before the KL (-> extra)
 alpha: 0.5             # 0 = pure CE, 1 = pure KD; 0.5 blends them (-> extra)
 teacher_model: Qwen/Qwen2.5-7B-Instruct   # provenance only (not loaded at train time)
+save_steps: 50         # periodic checkpoints -> a killed run resumes on re-run

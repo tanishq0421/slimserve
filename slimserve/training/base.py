@@ -17,6 +17,7 @@ from abc import abstractmethod
 
 from slimserve.core.config import TrainConfig
 from slimserve.core.interfaces import Trainer
+from slimserve.training.checkpoints import latest_checkpoint
 
 
 class BaseTrainer(Trainer):
@@ -24,7 +25,12 @@ class BaseTrainer(Trainer):
         model, tokenizer = self.load_model(config)
         dataset = self.prepare_dataset(config, tokenizer)
         trainer = self.build_trainer(model, tokenizer, dataset, config)
-        trainer.train()
+        # Auto-resume: if a prior run left checkpoints in output_dir, continue from
+        # the newest one. Re-running the same command after a kill just picks up.
+        resume = latest_checkpoint(config.output_dir)
+        if resume:
+            print(f"resuming from {resume}")
+        trainer.train(resume_from_checkpoint=resume)
         return self.save(model, tokenizer, config)
 
     @abstractmethod

@@ -36,6 +36,9 @@ def build_training_args(config: TrainConfig, *, remove_unused_columns: bool = Tr
 
     # 8-bit optimizer needs bitsandbytes; plain adamw for the bnb-free fp16 path.
     optim = "paged_adamw_8bit" if config.load_in_4bit else "adamw_torch"
+    # save_steps > 0 turns on periodic checkpointing so a killed long run can
+    # resume (see BaseTrainer). Short SFT runs leave it 0 -> no intermediate saves.
+    save_steps = int(config.extra.get("save_steps", 0))
     wanted = dict(
         output_dir=config.output_dir,
         per_device_train_batch_size=config.extra.get("batch_size", 8),
@@ -51,7 +54,9 @@ def build_training_args(config: TrainConfig, *, remove_unused_columns: bool = Tr
         gradient_checkpointing_kwargs={"use_reentrant": False},
         seed=config.extra.get("seed", 3407),
         report_to="none",
-        save_strategy="no",
+        save_strategy="steps" if save_steps > 0 else "no",
+        save_steps=save_steps or 500,           # ignored when strategy="no"
+        save_total_limit=2,                     # bound disk: keep the 2 newest
         remove_unused_columns=remove_unused_columns,
     )
     supported = set(inspect.signature(TrainingArguments.__init__).parameters)

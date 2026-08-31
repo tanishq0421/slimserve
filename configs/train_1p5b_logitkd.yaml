@@ -1,4 +1,4 @@
-# Phase 3 (Wk7 stretch) — LOGIT KD of the 1.5B student against cached teacher logits.
+# Phase 2 (Wk7 stretch) — LOGIT KD of the 1.5B student against cached teacher logits.
 # Unlike sequence distillation (train on the teacher's output *tokens*), this matches
 # the teacher's full output *distribution* — the one signal gold/sequence KD lacked.
 trainer: logit_kd

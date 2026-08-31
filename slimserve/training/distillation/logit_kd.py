@@ -1,4 +1,4 @@
-"""Logit / soft-label distillation (Phase 3, Week 7 stretch).
+"""Logit / soft-label distillation (Phase 2, Week 7 stretch).
 
 Classic KD: minimize KL divergence between the student's and teacher's
 temperature-softened output distributions, blended with the task loss via

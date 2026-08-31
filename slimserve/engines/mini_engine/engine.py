@@ -1,4 +1,4 @@
-"""MiniEngine — the from-scratch inference engine (Phase 2).
+"""MiniEngine — the from-scratch inference engine (Phase 3).
 
 Implements the same InferenceEngine interface as the vLLM adapter, so it drops
 into the exact benchmark harness and is selected by ``engine: mini`` in a YAML.

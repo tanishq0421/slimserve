@@ -1,4 +1,4 @@
-"""Base trainer — Template Method pattern (Phase 3).
+"""Base trainer — Template Method pattern (Phase 2).
 
 The training *lifecycle* is fixed — load the model, prepare the dataset, build the
 underlying (library) trainer, run it, save a mergeable checkpoint — while the

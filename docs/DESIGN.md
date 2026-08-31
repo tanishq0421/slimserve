@@ -105,7 +105,7 @@ slimserve/                       # repo root
     ├── engines/                 # InferenceEngine implementations
     │   ├── vllm_engine.py       #   Adapter around vLLM (Phase 1)
     │   ├── hf_engine.py         #   Adapter around HuggingFace generate()
-    │   └── mini_engine/         #   Phase 2: from-scratch engine
+    │   └── mini_engine/         #   Phase 3: from-scratch engine
     │       ├── kv_cache.py      #     Contiguous / Paged KV cache
     │       └── scheduler.py     #     continuous-batching scheduler
     ├── quantization/            # Quantizer: awq.py, gptq.py, bnb.py
@@ -133,7 +133,7 @@ Each module has one clear job, a small interface, and is runnable standalone.
 | **Factory + Registry** | `build("engine", "vllm", cfg)` from a config name |
 | **Template Method** | `BaseTrainer` loop; subclasses override `compute_loss` |
 
-**Guardrail:** keep Phase 2's `mini_engine/` readable over clever — its job is to
+**Guardrail:** keep Phase 3's `mini_engine/` readable over clever — its job is to
 teach. Don't add an interface until a second implementation needs it (YAGNI).
 
 ## 8. Phases & deliverables
@@ -143,13 +143,7 @@ teach. Don't add an interface until a second implementation needs it (YAGNI).
 - Quantize INT8 → INT4 (**AWQ**/GPTQ) + **KV-cache quantization**; tune continuous batching.
 - **Deliverable:** populated benchmark table + README explaining every knob.
 
-### Phase 2 — Rebuild the internals from scratch
-- Manual KV cache + decode loop in raw PyTorch for a small model.
-- Simplified **paged KV cache** (PagedAttention) → show fragmentation win.
-- Toy **continuous-batching scheduler**; compare vs vLLM.
-- **Deliverable:** `minigpt_engine/` + a "what I learned rebuilding vLLM's core" writeup.
-
-### Phase 3 — Compress to a true SLM
+### Phase 2 — Compress to a true SLM
 - **QLoRA**-fine-tune the student on tool-calling data (PEFT + Unsloth, single T4).
 - **Distill** teacher → student: sequence-level KD (train on teacher completions) +
   optional logit KD. Measure accuracy retained.
@@ -157,12 +151,18 @@ teach. Don't add an interface until a second implementation needs it (YAGNI).
   drafts, teacher verifies).
 - **Deliverable:** the LLM→SLM cost-vs-quality Pareto chart + headline result.
 
+### Phase 3 — Rebuild the internals from scratch
+- Manual KV cache + decode loop in raw PyTorch for a small model.
+- Simplified **paged KV cache** (PagedAttention) → show fragmentation win.
+- Toy **continuous-batching scheduler**; compare vs vLLM.
+- **Deliverable:** `minigpt_engine/` + a "what I learned rebuilding vLLM's core" writeup.
+
 ## 9. Success criteria
 
 - A reproducible benchmark table with **≥6 configs** across precision + model size.
 - Headline: **distilled INT4 SLM at ≥~6× lower $/1M-token cost and ≥~90–95% of teacher
   BFCL accuracy.**
-- Phase-2 from-scratch engine that correctly generates and demonstrably reduces KV-cache
+- Phase-3 from-scratch engine that correctly generates and demonstrably reduces KV-cache
   memory via paging.
 - A README a hiring engineer can skim in 2 minutes and grasp the cost story.
 
@@ -177,9 +177,9 @@ teach. Don't add an interface until a second implementation needs it (YAGNI).
 ## 11. Explicitly out of scope (YAGNI)
 
 - Multi-node / multi-GPU distributed serving.
-- Custom CUDA kernels (Phase 2 stays in PyTorch/Triton-level clarity, not hand-CUDA).
+- Custom CUDA kernels (Phase 3 stays in PyTorch/Triton-level clarity, not hand-CUDA).
 - Building a production auth/rate-limited API gateway.
-- Pruning is optional (the "P" in P-KD-Q) — include only if time allows after Phase 3.
+- Pruning is optional (the "P" in P-KD-Q) — include only if time allows after Phase 2.
 
 ## 12. Risks
 

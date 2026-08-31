@@ -1,4 +1,4 @@
-"""QLoRA fine-tuning via transformers + peft + bitsandbytes (Phase 3).
+"""QLoRA fine-tuning via transformers + peft + bitsandbytes (Phase 2).
 
 Deliberately NOT Unsloth: Unsloth drags in vLLM, which repeatedly broke the
 Kaggle environment (CUDA-lib mismatch). This portable stack — 4-bit base

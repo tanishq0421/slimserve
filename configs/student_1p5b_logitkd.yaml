@@ -1,4 +1,4 @@
-# Phase 3, Step 5 — evaluate the LOGIT-KD 1.5B student, served from HF (or --model local dir).
+# Phase 2, Step 5 — evaluate the LOGIT-KD 1.5B student, served from HF (or --model local dir).
 config_name: student_1p5b_logitkd
 engine: vllm
 model_path: tanishq0421/slimserve-student_1p5b_logitkd

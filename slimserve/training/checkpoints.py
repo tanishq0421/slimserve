@@ -1,4 +1,4 @@
-"""Checkpoint discovery for resumable training (Phase 3 robustness).
+"""Checkpoint discovery for resumable training (Phase 2 robustness).
 
 Long runs on free/preemptible compute get killed mid-flight (session timeout,
 OOM, a disconnect). With periodic checkpointing on, re-running the *same* command

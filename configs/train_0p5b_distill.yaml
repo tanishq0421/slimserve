@@ -1,4 +1,4 @@
-# Phase 3 — QLoRA sequence DISTILLATION of the 0.5B student (train on teacher outputs).
+# Phase 2 — QLoRA sequence DISTILLATION of the 0.5B student (train on teacher outputs).
 # The 0.5B has the biggest quality gap, so it's the most interesting distillation target.
 trainer: qlora
 base_model: Qwen/Qwen2.5-0.5B-Instruct

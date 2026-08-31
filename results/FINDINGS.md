@@ -82,7 +82,7 @@ The honest asterisks: it's a strict, single-call, 200-example metric, one run pe
 on old hardware, using pre-quantized checkpoints. None of that breaks the conclusion for
 this task — but it's why I'd call this strong signal, not the last word.
 
-# Phase 3 notes — fine-tuning a small SLM
+# Phase 2 notes — fine-tuning a small SLM
 
 ## What I was trying to find out
 
@@ -187,7 +187,7 @@ collapses to SFT. Distillation earns its keep on ambiguous, high-entropy targets
 noisy labels, a genuinely weak student) — not a narrow, near-deterministic task where a small student is
 already competent.
 
-## Bottom line (Phase 3)
+## Bottom line (Phase 2)
 
 For tool-calling, a **fine-tuned 1.5B matches the 7B teacher at a fraction of the cost**, and a
 **0.5B gets ~95% of the way at ~10× lower cost** — the compression thesis, end to end and across two

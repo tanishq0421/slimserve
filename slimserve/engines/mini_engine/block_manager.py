@@ -1,4 +1,4 @@
-"""Block allocator for the paged KV cache (Phase 2).
+"""Block allocator for the paged KV cache (Phase 3).
 
 This is the bookkeeping half of PagedAttention, kept separate from the tensor
 storage so it's pure Python and unit-testable with no model or GPU. It hands out

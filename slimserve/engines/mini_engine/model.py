@@ -1,4 +1,4 @@
-"""A from-scratch forward pass for Qwen2.5 (Phase 2).
+"""A from-scratch forward pass for Qwen2.5 (Phase 3).
 
 The teaching goal is the *attention + KV-cache machinery*, not re-deriving every
 matmul. So we **borrow the weight-bearing modules** from a loaded HF checkpoint

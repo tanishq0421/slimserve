@@ -1,4 +1,4 @@
-# Phase 2 — same from-scratch engine, but with the PAGED KV cache (block table +
+# Phase 3 — same from-scratch engine, but with the PAGED KV cache (block table +
 # on-demand blocks). Output must match the contiguous row on accuracy (same model,
 # same decode); the difference is memory layout — paged packs to ~1 block of slack
 # instead of reserving max_len per sequence.

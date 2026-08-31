@@ -1,4 +1,4 @@
-"""Turn Phase-2 data records into tokenized training examples.
+"""Turn Phase-3 data records into tokenized training examples.
 
 Renders the prompt with the student's chat template (tools included), appends the
 target tool call + EOS, tokenizes, and masks the prompt tokens in the labels so

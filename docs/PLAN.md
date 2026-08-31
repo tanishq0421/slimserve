@@ -31,46 +31,23 @@ Assumes ~10–15 hrs/week on **Kaggle** (2× T4). Adjust freely.
 
 ---
 
-## Phase 2 — Rebuild the Internals (Weeks 3–5)
+## Phase 2 — Compress to an SLM (Weeks 3–5)
 
-### Week 3 — Manual inference loop
-- [ ] In raw PyTorch, load a small model (e.g. `Qwen2.5-0.5B`) and write a decode loop
-      by hand with a **naive contiguous KV cache**.
-- [ ] Verify output matches HF `generate()`.
-- **Learn:** attention at inference time; prefill vs decode; why KV cache = no recompute.
-- **Deliverable:** `minigpt_engine/decode.py` + `kv_cache.py` (naive).
-
-### Week 4 — Paged KV cache
-- [ ] Implement a **simplified PagedAttention**: fixed-size KV blocks + a block table.
-- [ ] Show the **memory-fragmentation win** vs contiguous cache with a small experiment.
-- **Learn:** vLLM's PagedAttention paper (core idea only, not the CUDA).
-- **Deliverable:** `kv_cache.py` (paged) + a fragmentation before/after chart.
-
-### Week 5 — Toy scheduler + comparison
-- [ ] Implement a minimal **continuous-batching scheduler** (requests join/leave mid-gen).
-- [ ] Benchmark your engine vs vLLM; write up the gap honestly.
-- **Deliverable:** `scheduler.py` + "what I learned rebuilding vLLM's core" writeup.
-- ✅ **Milestone: deep systems signal — you understand what you used in Phase 1.**
-
----
-
-## Phase 3 — Compress to an SLM (Weeks 6–8+)
-
-### Week 6 — QLoRA fine-tune the student
+### Week 3 — QLoRA fine-tune the student
 - [ ] QLoRA-fine-tune `Qwen2.5-1.5B-Instruct` on `xlam-function-calling-60k` using
       **PEFT + Unsloth** on a single T4.
 - [ ] Evaluate on a held-out slice; add the **Student-SFT row**.
 - **Learn:** LoRA (low-rank adapters) and QLoRA (NF4 base + LoRA); why it fits one GPU.
 - **Deliverable:** `compress/qlora_finetune.py` + student SFT benchmark row.
 
-### Week 7 — Distillation
+### Week 4 — Distillation
 - [ ] Generate teacher tool-call completions; train student on them (**sequence-level KD**).
 - [ ] (Stretch) add **logit KD** (KL to teacher soft labels).
 - [ ] Add the **distilled-student row**; compare vs plain SFT.
 - **Learn:** knowledge distillation; soft labels vs hard labels.
 - **Deliverable:** `compress/distill.py` + accuracy-retained comparison.
 
-### Week 8 — Final SLM + the story
+### Week 5 — Final SLM + the story
 - [ ] Quantize the distilled student to **INT4**; serve it; add the final row.
 - [ ] Set up the **BFCL** harness for the headline accuracy number.
 - [ ] Generate the **cost-vs-quality Pareto chart**; write the README headline result.
@@ -80,11 +57,34 @@ Assumes ~10–15 hrs/week on **Kaggle** (2× T4). Adjust freely.
 
 ---
 
+## Phase 3 — Rebuild the Internals (Weeks 6–8)
+
+### Week 6 — Manual inference loop
+- [ ] In raw PyTorch, load a small model (e.g. `Qwen2.5-0.5B`) and write a decode loop
+      by hand with a **naive contiguous KV cache**.
+- [ ] Verify output matches HF `generate()`.
+- **Learn:** attention at inference time; prefill vs decode; why KV cache = no recompute.
+- **Deliverable:** `minigpt_engine/decode.py` + `kv_cache.py` (naive).
+
+### Week 7 — Paged KV cache
+- [ ] Implement a **simplified PagedAttention**: fixed-size KV blocks + a block table.
+- [ ] Show the **memory-fragmentation win** vs contiguous cache with a small experiment.
+- **Learn:** vLLM's PagedAttention paper (core idea only, not the CUDA).
+- **Deliverable:** `kv_cache.py` (paged) + a fragmentation before/after chart.
+
+### Week 8 — Toy scheduler + comparison
+- [ ] Implement a minimal **continuous-batching scheduler** (requests join/leave mid-gen).
+- [ ] Benchmark your engine vs vLLM; write up the gap honestly.
+- **Deliverable:** `scheduler.py` + "what I learned rebuilding vLLM's core" writeup.
+- ✅ **Milestone: deep systems signal — you understand what you built, not just used.**
+
+---
+
 ## Definition of done
 
 - `results/benchmarks.csv` has ≥6 configs; README shows the cost-vs-quality Pareto chart.
 - Headline: **distilled INT4 SLM at ≥~6× lower $/1M-token cost, ≥~90–95% teacher BFCL acc.**
-- Phase-2 engine generates correctly and demonstrably reduces KV-cache memory via paging.
+- Phase-3 engine generates correctly and demonstrably reduces KV-cache memory via paging.
 - README is skimmable in 2 minutes with the cost story up top.
 
 ## Working notes

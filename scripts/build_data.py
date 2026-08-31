@@ -1,4 +1,4 @@
-"""Build Phase 3 training data from xLAM.
+"""Build Phase 2 training data from xLAM.
 
     # gold SFT set (instant — just formatting the ground-truth calls):
     python -m scripts.build_data --mode gold --num 10000 --out data/sft_gold.jsonl

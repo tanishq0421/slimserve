@@ -1,4 +1,4 @@
-"""Sequence-level knowledge distillation (Phase 3, Week 7).
+"""Sequence-level knowledge distillation (Phase 2, Week 7).
 
 The production-common flavor: the teacher generates tool-call completions, and
 the student is trained (plain SFT) on those completions. No teacher logits
@@ -15,4 +15,4 @@ from slimserve.core.registry import register
 class SequenceLevelKD(DistillStrategy):
     def compute_loss(self, student_batch, teacher_batch, config: DistillConfig):
         # cross-entropy of the student against the teacher's generated tokens
-        raise NotImplementedError("Phase 3 Wk7: CE against teacher completions.")
+        raise NotImplementedError("Phase 2 Wk7: CE against teacher completions.")

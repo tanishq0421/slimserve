@@ -1,4 +1,4 @@
-# Phase 3 — QLoRA SFT of the 1.5B student on GOLD labels (the baseline recipe).
+# Phase 2 — QLoRA SFT of the 1.5B student on GOLD labels (the baseline recipe).
 trainer: qlora
 base_model: Qwen/Qwen2.5-1.5B-Instruct
 dataset: data/sft_gold.jsonl

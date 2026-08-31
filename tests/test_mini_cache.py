@@ -1,4 +1,4 @@
-"""KV-cache + decode-loop tests (Phase 2, Rung A).
+"""KV-cache + decode-loop tests (Phase 3, Rung A).
 
 Fast: the ContiguousKVCache bookkeeping (tiny tensors, no model).
 Slow: cached greedy decode must equal the no-cache greedy decode — and since the

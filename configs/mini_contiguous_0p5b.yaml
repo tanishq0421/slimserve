@@ -1,4 +1,4 @@
-# Phase 2 — benchmark the FROM-SCRATCH engine with a naive contiguous KV cache.
+# Phase 3 — benchmark the FROM-SCRATCH engine with a naive contiguous KV cache.
 # Same 0.5B as student_0p5b_base, served through MiniEngine instead of vLLM, so the
 # tool-calling accuracy must reproduce the vLLM row (~0.975/0.715) from scratch —
 # a built-in end-to-end correctness check. tok/s will be far below vLLM (Python

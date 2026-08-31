@@ -97,7 +97,7 @@ def engine_config_from_dict(cfg: dict) -> EngineConfig:
         "quantization": cfg.get("quantization"),
         "load_format": cfg.get("load_format"),
     }
-    # Mini-engine (Phase 2) knobs — only added when present, so vLLM configs are
+    # Mini-engine (Phase 3) knobs — only added when present, so vLLM configs are
     # untouched and the mini engine's own defaults still apply when omitted.
     for key in ("kv_cache", "block_size", "num_blocks", "device"):
         if key in cfg:

@@ -34,7 +34,7 @@ class ToolCallAccuracyEvaluator(Evaluator):
 
     def _load_examples(self) -> list[tuple[str, list, dict]]:
         """Held-out single-call examples, taken from the END of the dataset so the
-        front stays free for Phase-3 training (no leakage)."""
+        front stays free for Phase-2 training (no leakage)."""
         from datasets import load_dataset
 
         ds = load_dataset(self.dataset, split=self.split)

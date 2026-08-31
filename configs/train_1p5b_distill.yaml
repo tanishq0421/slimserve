@@ -1,4 +1,4 @@
-# Phase 3 — QLoRA sequence DISTILLATION of the 1.5B student (train on teacher outputs).
+# Phase 2 — QLoRA sequence DISTILLATION of the 1.5B student (train on teacher outputs).
 # Same recipe as gold, only the dataset differs -> that's what makes it distillation.
 trainer: qlora
 base_model: Qwen/Qwen2.5-1.5B-Instruct

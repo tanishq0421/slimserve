@@ -1,4 +1,4 @@
-"""Continuous-batching scheduler (Phase 2).
+"""Continuous-batching scheduler (Phase 3).
 
 The idea that makes real serving fast: instead of running one batch of requests to
 completion before starting the next, keep a *running set* that's refilled every

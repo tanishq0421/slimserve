@@ -1,4 +1,4 @@
-"""From-scratch KV cache implementations (Phase 2).
+"""From-scratch KV cache implementations (Phase 3).
 
 Two concrete strategies behind the KVCache interface:
 

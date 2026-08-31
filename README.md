@@ -98,12 +98,13 @@ python -m scripts.run_benchmark --config configs/student_1p5b_gold.yaml \
 
 1. ✅ **Serve & benchmark** existing tools — vLLM + INT8/INT4 quantization, measured on real
    tool-calling accuracy. Established the cost baseline: *quantization is essentially free.*
-2. ⏳ **Rebuild the internals** from scratch — paged KV cache, continuous batching — to
-   understand what makes serving fast. *(planned)*
-3. ✅ **Compress to an SLM** — QLoRA fine-tuning + knowledge distillation (teacher → student).
+2. ✅ **Compress to an SLM** — QLoRA fine-tuning + knowledge distillation (teacher → student).
    A fine-tuned 1.5B matched the 7B teacher; a 0.5B got ~95% at ~11× lower cost.
+3. ✅ **Rebuild the internals** from scratch — own RoPE + attention, KV cache, paged attention, and
+   continuous batching, in a mini engine whose output matches HuggingFace token-for-token — to show
+   (not just use) what makes serving fast.
 
-Within Phase 3 the distillation story is deliberately incremental, each step testing the next:
+Within Phase 2 the distillation story is deliberately incremental, each step testing the next:
 **gold SFT** (train on labels) → **sequence distillation** (train on the teacher's outputs) →
 **logit distillation** (match the teacher's full output distribution). All three tied at ~0.79 arg —
 escalating the richness of the signal, from hard labels to the teacher's full distribution, moved the
@@ -132,9 +133,9 @@ flowchart TD
     REG --> TRN["Trainer<br/>(ABC)"]
     REG --> EVL["Evaluator<br/>(ABC)"]
     ENG --> V["VLLMEngine"]
-    ENG --> M["mini_engine · Phase 2"]
+    ENG --> M["mini_engine · Phase 3"]
     TRN --> Q["QLoRATrainer"]
-    TRN --> L["LogitKDTrainer · next"]
+    TRN --> L["LogitKDTrainer"]
     EVL --> TC["ToolCallAccuracyEvaluator"]
 ```
 
@@ -144,9 +145,9 @@ interface. Adding a backend, trainer, or metric is a new registered class — no
 ```
 slimserve/
 ├── core/          # interfaces (ABCs), typed configs, registry
-├── engines/       # vLLM / HF adapters + from-scratch mini_engine (Phase 2)
+├── engines/       # vLLM / HF adapters + from-scratch mini_engine (Phase 3)
 ├── quantization/  # AWQ / GPTQ / bitsandbytes
-├── training/      # QLoRA + distillation strategies (Phase 3)
+├── training/      # QLoRA + distillation strategies (Phase 2)
 ├── evaluation/    # xLAM exact-match tool-calling metrics (tool_acc / arg_acc)
 └── benchmark/     # runner + append-only results store (the hero table)
 ```
@@ -165,7 +166,9 @@ The hero benchmark table lives in `results/benchmarks.csv`.
 
 - ✅ **Phase 1 — serve, quantize, benchmark.** FP16 / INT8 / INT4 teacher, real held-out
   tool-calling accuracy, cost-vs-quality chart.
-- ✅ **Phase 3 — compress to an SLM.** QLoRA gold SFT + sequence distillation for the 1.5B and
-  0.5B students; merged and served from the Hub; full comparison table above.
-- ⏳ **Next — logit distillation** (match the teacher's output distribution, not just its tokens),
-  then **Phase 2** (from-scratch KV-cache / paged-attention / continuous-batching engine).
+- ✅ **Phase 2 — compress to an SLM.** QLoRA gold SFT + sequence & logit distillation for the 1.5B
+  and 0.5B students; merged, served from the Hub, full comparison table above. Distillation tied
+  plain SFT across all three recipes.
+- ✅ **Phase 3 — rebuild the internals.** From-scratch engine (own RoPE + GQA attention, contiguous
+  and paged KV cache, continuous batching), verified identical to HuggingFace and reproducing the
+  0.5B tool-calling accuracy on GPU. *(benchmark rows landing)*

@@ -61,7 +61,7 @@ class Quantizer(ABC):
 
 
 class KVCache(ABC):
-    """Phase-2 teaching abstraction: how per-layer key/value tensors are stored.
+    """Phase-3 teaching abstraction: how per-layer key/value tensors are stored.
 
     A transformer keeps a separate K/V cache per layer, so ``append`` is indexed
     by layer and returns the full cached K/V for that sequence+layer so far (the
@@ -91,7 +91,7 @@ class KVCache(ABC):
 
 
 class Scheduler(ABC):
-    """Decides which requests run in the current decode step (Phase 2)."""
+    """Decides which requests run in the current decode step (Phase 3)."""
 
     @abstractmethod
     def admit(self, request: GenerationRequest) -> int:

@@ -1,0 +1,17 @@
+# External validation — the fine-tuned 1.5B gold student on the official BFCL AST
+# categories (simple / multiple / parallel), scored by BFCL's own checker. This is
+# the standard leaderboard methodology, not our self-made xLAM exact-match. Expect
+# strong simple/multiple, weak parallel (the students were fine-tuned on single calls).
+config_name: student_1p5b_gold_bfcl
+engine: vllm
+model_path: tanishq0421/slimserve-student_1p5b_gold
+precision: fp16
+kv_cache_quant: false
+max_num_seqs: 256
+tensor_parallel_size: 1
+gpu_memory_utilization: 0.90
+max_model_len: 8192
+params_b: 1.5
+gpu_hourly_usd: 0.20
+evaluator: bfcl
+eval_samples: 200

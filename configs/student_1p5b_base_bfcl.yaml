@@ -1,0 +1,17 @@
+# External validation — the BASE (off-the-shelf) Qwen2.5-1.5B on BFCL. The anchor for
+# the "did single-call fine-tuning narrow the model?" comparison: the base can do
+# parallel calls; if the fine-tuned student scores lower on parallel, that's the
+# generality-vs-sharpness trade-off, made visible on a standard benchmark.
+config_name: student_1p5b_base_bfcl
+engine: vllm
+model_path: Qwen/Qwen2.5-1.5B-Instruct
+precision: fp16
+kv_cache_quant: false
+max_num_seqs: 256
+tensor_parallel_size: 1
+gpu_memory_utilization: 0.90
+max_model_len: 8192
+params_b: 1.5
+gpu_hourly_usd: 0.20
+evaluator: bfcl
+eval_samples: 200

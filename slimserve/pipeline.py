@@ -12,6 +12,7 @@ from slimserve.engines.mini_engine import engine as mini_engine  # noqa: F401
 from slimserve.quantization import awq             # noqa: F401
 from slimserve.training import qlora_trainer       # noqa: F401
 from slimserve.training.distillation import logit_kd, sequence_kd  # noqa: F401
+from slimserve.evaluation import bfcl_evaluator  # noqa: F401  register "bfcl"
 from slimserve.evaluation import toolcall_evaluator  # noqa: F401
 # ----------------------------------------------------------------------------
 

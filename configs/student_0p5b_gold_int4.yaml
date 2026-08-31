@@ -3,10 +3,9 @@
 # INT4 "free lunch" holds as models shrink.
 config_name: student_0p5b_gold_int4
 engine: vllm
-model_path: tanishq0421/slimserve-student_0p5b_gold
+model_path: tanishq0421/slimserve-student_0p5b_gold   # placeholder; serve the AWQ dir via --model
 precision: int4
-quantization: bitsandbytes
-load_format: bitsandbytes
+quantization: awq          # served from an AWQ checkpoint (scripts/quantize.py)
 kv_cache_quant: false
 max_num_seqs: 256
 tensor_parallel_size: 1

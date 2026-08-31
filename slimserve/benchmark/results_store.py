@@ -24,3 +24,14 @@ class ResultsStore:
             if new_file:
                 writer.writeheader()
             writer.writerow(row)
+
+    def has(self, config_name: str) -> bool:
+        """Whether a row for ``config_name`` is already recorded.
+
+        Lets a benchmark suite resume after a kill by skipping done configs (and
+        avoids appending a duplicate row when a single config is re-run).
+        """
+        if not self.path.exists():
+            return False
+        with self.path.open(newline="") as f:
+            return any(r["config_name"] == config_name for r in csv.DictReader(f))

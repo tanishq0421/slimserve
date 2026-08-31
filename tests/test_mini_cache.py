@@ -125,6 +125,26 @@ def test_cached_decode_equals_no_cache():
 
 
 @pytest.mark.slow
+def test_generate_batch_matches_individual():
+    # Continuous batching must give each sequence exactly what it would get alone.
+    # Different-length prompts exercise the ragged running set.
+    from slimserve.core.config import (EngineConfig, GenerationRequest,
+                                       Precision)
+    from slimserve.engines.mini_engine.engine import MiniEngine
+
+    eng = MiniEngine(EngineConfig(name="mini", model_path=MODEL, precision=Precision.FP16,
+                                  extra={"device": "cpu", "max_model_len": 256}))
+    reqs = [GenerationRequest(prompt=p, temperature=0.0, max_tokens=12)
+            for p in ["The capital of France is",
+                      "Water is made of",
+                      "The opposite of hot is"]]
+    batched = eng.generate_batch(reqs)
+    individual = [eng.generate(r) for r in reqs]
+    for b, s in zip(batched, individual):
+        assert b.text == s.text
+
+
+@pytest.mark.slow
 def test_mini_engine_generates():
     from slimserve.core.config import (EngineConfig, GenerationRequest,
                                        Precision)

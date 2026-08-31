@@ -120,8 +120,69 @@ class MiniEngine(InferenceEngine):
     def generate_batch(
         self, requests: Iterable[GenerationRequest]
     ) -> list[GenerationOutput]:
-        # One at a time for now — continuous batching is the next rung.
-        return [self.generate(r) for r in requests]
+        """Continuous batching: many sequences share one cache and advance together.
+
+        Each request is admitted to the scheduler and prefilled on first run; then
+        every decode step advances the whole running set at once. Sequences retire
+        independently on EOS/max_tokens (freeing their cache blocks), and waiting
+        requests take the freed slots — no head-of-line blocking.
+        """
+        self._ensure_loaded()
+        import time
+
+        import torch
+
+        from slimserve.engines.mini_engine.scheduler import ContinuousBatchScheduler
+
+        reqs = list(requests)
+        if not reqs:
+            return []
+        t0 = time.perf_counter()
+        model, eos = self._model, self._tokenizer.eos_token_id
+        cache = self._make_cache()                       # shared across sequences
+        scheduler = ContinuousBatchScheduler(self.config.max_num_seqs)
+
+        state: dict[int, dict] = {}
+        for r in reqs:
+            sid = scheduler.admit(r)
+            ids = self._tokenizer(self._format(r), return_tensors="pt",
+                                  add_special_tokens=False).input_ids.to(self._device)
+            state[sid] = {"ids": ids, "n_prompt": ids.shape[1], "req": r,
+                          "gen": [], "pos": 0, "next": None}
+        order = list(state.keys())                        # return in request order
+
+        while scheduler.has_work():
+            running = scheduler.next_batch()
+            for sid in running:                           # prefill newcomers
+                st = state[sid]
+                if st["next"] is None:
+                    cache.allocate(sid, st["n_prompt"])
+                    logits = model.forward(st["ids"], cache=cache, seq_id=sid, start_pos=0)
+                    st["pos"] = st["n_prompt"]
+                    st["next"] = self._sample(logits[0, -1], st["req"].temperature)
+
+            tokens = torch.tensor([[state[s]["next"]] for s in running], device=self._device)
+            positions = [state[s]["pos"] for s in running]
+            logits = model.decode_batch(tokens, cache, running, positions)   # [B,1,V]
+            for i, sid in enumerate(running):
+                st = state[sid]
+                st["gen"].append(st["next"])
+                st["pos"] += 1
+                if st["next"] == eos or len(st["gen"]) >= st["req"].max_tokens:
+                    cache.free(sid)
+                    scheduler.retire(sid)
+                else:
+                    st["next"] = self._sample(logits[i, -1], st["req"].temperature)
+
+        elapsed = (time.perf_counter() - t0) * 1000.0
+        outs = []
+        for sid in order:
+            st = state[sid]
+            outs.append(GenerationOutput(
+                text=self._tokenizer.decode(st["gen"], skip_special_tokens=True),
+                prompt_tokens=st["n_prompt"], completion_tokens=len(st["gen"]),
+                latency_ms=elapsed))
+        return outs
 
     def memory_footprint(self) -> MemoryStats:
         self._ensure_loaded()

@@ -114,6 +114,53 @@ class MiniQwen:
         h = residual + layer.mlp(layer.post_attention_layernorm(h))
         return h
 
+    def _decode_layer_batch(self, layer, idx, h, cos, sin, cache, seq_ids):
+        """One decode step for a batch of sequences. The projections and MLP batch
+        across sequences (the throughput win); attention is per-sequence because
+        each sequence has its own cache length."""
+        import torch
+
+        b = h.shape[0]
+        residual = h
+        x = layer.input_layernorm(h)
+        attn = layer.self_attn
+        q = attn.q_proj(x).view(b, 1, self.n_heads, self.head_dim).transpose(1, 2)
+        k = attn.k_proj(x).view(b, 1, self.n_kv, self.head_dim).transpose(1, 2)
+        v = attn.v_proj(x).view(b, 1, self.n_kv, self.head_dim).transpose(1, 2)
+        cosb, sinb = cos.view(b, 1, 1, -1), sin.view(b, 1, 1, -1)   # per-seq position
+        q = q * cosb + _rotate_half(q) * sinb
+        k = k * cosb + _rotate_half(k) * sinb
+
+        outs = []
+        for i, seq_id in enumerate(seq_ids):                # per-sequence attention
+            fk, fv = cache.append(seq_id, idx, k[i].transpose(0, 1), v[i].transpose(0, 1))
+            full_k = self._repeat_kv(fk.transpose(0, 1).unsqueeze(0))
+            full_v = self._repeat_kv(fv.transpose(0, 1).unsqueeze(0))
+            start = fk.shape[0] - 1                          # this token's position
+            outs.append(self._attention(q[i:i + 1], full_k, full_v, start=start))
+        out = torch.cat(outs, dim=0).transpose(1, 2).reshape(b, 1, self.n_heads * self.head_dim)
+        h = residual + attn.o_proj(out)
+        residual = h
+        h = residual + layer.mlp(layer.post_attention_layernorm(h))
+        return h
+
+    def decode_batch(self, token_ids, cache, seq_ids, positions):
+        """Advance B running sequences by one token each, in a single batched step.
+
+        token_ids: [B, 1]; seq_ids: the B cache ids; positions: each sequence's
+        current length (the absolute position of its new token, for RoPE).
+        Returns logits [B, 1, vocab].
+        """
+        import torch
+
+        model = self.hf.model
+        with torch.no_grad():
+            h = model.embed_tokens(token_ids)
+            cos, sin = self._rope(torch.tensor(positions, device=self.device))
+            for idx, layer in enumerate(model.layers):
+                h = self._decode_layer_batch(layer, idx, h, cos, sin, cache, seq_ids)
+            return self.hf.lm_head(model.norm(h))
+
     # --- public forward -----------------------------------------------------
     def forward(self, input_ids, cache=None, seq_id: int = 0, start_pos: int = 0):
         """input_ids: [B, T] -> logits [B, T, vocab].

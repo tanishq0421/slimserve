@@ -26,7 +26,8 @@ Live table in [`results/benchmarks.csv`](results/benchmarks.csv); per-run notes 
 | teacher_int4_awq | 7B | int4 (AWQ) | 0.990 | 0.780 | 576.6 | 1278 | 0.0964 |
 | student_1p5b_base | 1.5B | fp16 (off-the-shelf) | 0.985 | 0.770 | 1470.3 | 670 | 0.0378 |
 | **student_1p5b_gold** | 1.5B | fp16 (fine-tuned, SFT) | **1.000** | **0.795** | 1465.1 | 667 | 0.0379 |
-| **student_1p5b_distill** | 1.5B | fp16 (distilled) | **1.000** | 0.790 | 1429.9 | 677 | 0.0389 |
+| **student_1p5b_distill** | 1.5B | fp16 (sequence KD) | **1.000** | 0.790 | 1429.9 | 677 | 0.0389 |
+| **student_1p5b_logitkd** | 1.5B | fp16 (logit KD) | **1.000** | 0.790 | 1449.3 | 667 | 0.0383 |
 | student_0p5b_base | 0.5B | fp16 (off-the-shelf) | 0.975 | 0.715 | 3373.0 | 270 | 0.0165 |
 | **student_0p5b_gold** | 0.5B | fp16 (fine-tuned, SFT) | 0.990 | 0.755 | 3431.3 | 270 | **0.0162** |
 | **student_0p5b_distill** | 0.5B | fp16 (distilled) | 0.990 | 0.760 | 3378.0 | 269 | **0.0164** |
@@ -52,11 +53,14 @@ Measured on Kaggle T4s, single GPU except the FP16 teacher; `$/1M` uses $0.20/hr
   **~4.5× lower cost** and lower latency. The 0.5B improved too — 0.975/0.715 → **0.99 / ~0.76**
   (+4 arg pts) at **~10× lower cost** — but plateaued below the teacher: a **capacity ceiling**, not
   a recipe problem (the 1.5B had the room to reach 0.795, the 0.5B didn't).
-- **Distillation did not beat plain SFT — at either size** (1.5B: gold 0.795 vs distill 0.790;
-  0.5B: gold 0.755 vs distill 0.760 — both ties). Tested, not assumed. Sequence-level distillation
-  copies the teacher's *output tokens*, which on this narrow single-call task are ~the same as the
-  gold labels; without the teacher's *logits* (logit KD) there's no richer signal to transfer. Gold
-  SFT is the simpler, equal-or-better default here.
+- **Distillation never beat plain SFT — across all three recipes.** I escalated the signal from hard
+  labels → the teacher's output tokens (sequence KD) → the teacher's full distribution (logit KD), and
+  all three landed at ~0.79 arg, level with the teacher: 1.5B **gold 0.795 / sequence 0.790 / logit 0.790**
+  (0.5B gold/distill tied too). Tested, not assumed. The reason: "dark knowledge" only helps when the
+  teacher's distribution is *spread out*, but for single tool-call selection the teacher is **near one-hot**,
+  so its softmax ≈ the gold label and there's nothing extra to transfer. Distillation earns its keep on
+  high-entropy tasks or genuinely weak students — not a narrow, near-deterministic one. **Gold SFT is the
+  right default here.**
 
 Full write-up, including what these numbers *don't* prove, in
 [`results/FINDINGS.md`](results/FINDINGS.md).
@@ -101,9 +105,9 @@ python -m scripts.run_benchmark --config configs/student_1p5b_gold.yaml \
 
 Within Phase 3 the distillation story is deliberately incremental, each step testing the next:
 **gold SFT** (train on labels) → **sequence distillation** (train on the teacher's outputs) →
-**logit distillation** (match the teacher's full output distribution). Gold and sequence KD tied
-at both sizes — the teacher's *tokens* carried no signal the labels didn't — so logit KD, which
-uses the teacher's *probabilities*, is the open question and the next step.
+**logit distillation** (match the teacher's full output distribution). All three tied at ~0.79 arg —
+escalating the richness of the signal, from hard labels to the teacher's full distribution, moved the
+number only by noise, because on this near-deterministic task the teacher's softmax ≈ the gold label.
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the full spec and
 [`docs/PLAN.md`](docs/PLAN.md) for the week-by-week plan.

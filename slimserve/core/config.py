@@ -89,19 +89,25 @@ class DistillConfig:
 
 def engine_config_from_dict(cfg: dict) -> EngineConfig:
     """Build an EngineConfig from a parsed YAML dict (shared by the CLIs)."""
+    extra = {
+        "tensor_parallel_size": cfg.get("tensor_parallel_size", 1),
+        "gpu_memory_utilization": cfg.get("gpu_memory_utilization", 0.90),
+        "max_model_len": cfg.get("max_model_len"),
+        "enforce_eager": cfg.get("enforce_eager", False),
+        "quantization": cfg.get("quantization"),
+    }
+    # Mini-engine (Phase 2) knobs — only added when present, so vLLM configs are
+    # untouched and the mini engine's own defaults still apply when omitted.
+    for key in ("kv_cache", "block_size", "num_blocks", "device"):
+        if key in cfg:
+            extra[key] = cfg[key]
     return EngineConfig(
         name=cfg["engine"],
         model_path=cfg["model_path"],
         precision=Precision(cfg.get("precision", "fp16")),
         kv_cache_quant=cfg.get("kv_cache_quant", False),
         max_num_seqs=cfg.get("max_num_seqs", 256),
-        extra={
-            "tensor_parallel_size": cfg.get("tensor_parallel_size", 1),
-            "gpu_memory_utilization": cfg.get("gpu_memory_utilization", 0.90),
-            "max_model_len": cfg.get("max_model_len"),
-            "enforce_eager": cfg.get("enforce_eager", False),
-            "quantization": cfg.get("quantization"),
-        },
+        extra=extra,
     )
 
 

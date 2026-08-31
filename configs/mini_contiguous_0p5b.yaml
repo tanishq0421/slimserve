@@ -1,0 +1,17 @@
+# Phase 2 — benchmark the FROM-SCRATCH engine with a naive contiguous KV cache.
+# Same 0.5B as student_0p5b_base, served through MiniEngine instead of vLLM, so the
+# tool-calling accuracy must reproduce the vLLM row (~0.975/0.715) from scratch —
+# a built-in end-to-end correctness check. tok/s will be far below vLLM (Python
+# loop, no fused kernels): the point is concept fidelity, not beating vLLM.
+config_name: mini_contiguous_0p5b
+engine: mini
+model_path: Qwen/Qwen2.5-0.5B-Instruct
+precision: fp16
+device: cuda
+kv_cache: contiguous
+max_num_seqs: 32
+max_model_len: 1024
+params_b: 0.5
+gpu_hourly_usd: 0.20
+evaluator: toolcall
+eval_samples: 200

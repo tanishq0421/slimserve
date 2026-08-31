@@ -1,0 +1,18 @@
+# Phase 2 — same from-scratch engine, but with the PAGED KV cache (block table +
+# on-demand blocks). Output must match the contiguous row on accuracy (same model,
+# same decode); the difference is memory layout — paged packs to ~1 block of slack
+# instead of reserving max_len per sequence.
+config_name: mini_paged_0p5b
+engine: mini
+model_path: Qwen/Qwen2.5-0.5B-Instruct
+precision: fp16
+device: cuda
+kv_cache: paged
+block_size: 16
+num_blocks: 2048        # 32 concurrent seqs x up to ~64 blocks each
+max_num_seqs: 32
+max_model_len: 1024
+params_b: 0.5
+gpu_hourly_usd: 0.20
+evaluator: toolcall
+eval_samples: 200

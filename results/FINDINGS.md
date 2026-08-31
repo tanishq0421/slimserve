@@ -160,12 +160,40 @@ argument structure. Useful framing for a deployment choice: the 1.5B *matches* t
 you ~95% of the way at half the size and ~10× lower cost — pick by how much that last few points is
 worth.
 
+## And finally logit KD — the richest signal, tested
+
+Sequence KD tied gold, but with a caveat I kept flagging: it only copies the teacher's *output tokens*,
+which on a single-call task are ~the gold labels. The honest test is **logit KD** — train the student to
+match the teacher's *full probability distribution* per token (KL divergence, temperature 2.0, blended
+50/50 with CE), using the teacher's top-50 logits precomputed offline. This is the one recipe that gives
+the student something the hard labels can't: the teacher's *uncertainty* and which tools it finds similar.
+
+| 1.5B recipe | what the student copies | tool_acc | arg_acc |
+|---|---|---|---|
+| gold (SFT) | the dataset's labels | 1.00 | 0.795 |
+| sequence KD | the teacher's output tokens | 1.00 | 0.790 |
+| **logit KD** | the teacher's full distribution | 1.00 | **0.790** |
+| *(7B teacher)* | — | *0.990* | *0.795* |
+
+**It tied too.** All three recipes — labels, teacher tokens, teacher distribution — land at ~0.79, level
+with the teacher. Escalating the *richness* of the distillation signal, from hard labels all the way to
+the full soft distribution, moved the number by noise. That's the clean, tested-not-assumed result:
+
+**Why distillation's advantage didn't show up here.** "Dark knowledge" — the extra information in a soft
+label — only exists when the teacher's distribution is *spread out* (a "2" that looks a bit like a "7").
+For single tool-call selection the teacher is **nearly one-hot**: it's ~certain which function to call, so
+`softmax(teacher)` is a spike ≈ the one-hot gold label. There's almost no distribution to transfer, so KD
+collapses to SFT. Distillation earns its keep on ambiguous, high-entropy targets (open-ended generation,
+noisy labels, a genuinely weak student) — not a narrow, near-deterministic task where a small student is
+already competent.
+
 ## Bottom line (Phase 3)
 
 For tool-calling, a **fine-tuned 1.5B matches the 7B teacher at a fraction of the cost**, and a
 **0.5B gets ~95% of the way at ~10× lower cost** — the compression thesis, end to end and across two
-sizes. Two findings that were tested, not assumed: **distillation never beat plain SFT** (at either
-size — sequence-level KD on a narrow task carries no signal the gold labels don't already have), and
-the smallest model's remaining gap is a **capacity ceiling**, not something more data or a better
-recipe would fix. Gold SFT is the right default here; distillation would need the teacher's *logits*,
-not just its outputs, to earn its place.
+sizes. And the distillation question got a thorough, escalating answer: **across all three recipes —
+gold SFT, sequence KD, and logit KD — none beat plain SFT.** Not because distillation is useless, but
+because this task is narrow and near-deterministic, so even the teacher's full distribution carries no
+signal the labels don't. Gold SFT is the right default here; distillation would earn its place on a
+higher-entropy task or a genuinely weaker student. The smallest model's remaining gap is a **capacity
+ceiling**, not a recipe problem. Every one of these is a *measured* conclusion, not an assumed one.

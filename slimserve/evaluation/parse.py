@@ -11,18 +11,8 @@ _TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 _BARE_JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
-def parse_tool_call(text: str) -> dict | None:
-    """Pull the first tool call out of model output.
-
-    Handles Qwen's ``<tool_call>{...}</tool_call>`` wrapper and a bare JSON
-    object fallback. Returns ``{"name": str, "arguments": dict}`` or None.
-    """
-    m = _TOOL_CALL_RE.search(text)
-    raw = m.group(1) if m else (_BARE_JSON_RE.search(text) or [None])[0]
-    if isinstance(raw, re.Match):
-        raw = raw.group(0)
-    if not raw:
-        return None
+def _parse_one(raw: str) -> dict | None:
+    """One JSON blob -> ``{"name", "arguments"}`` (or None if malformed)."""
     try:
         obj = json.loads(raw)
     except json.JSONDecodeError:
@@ -36,6 +26,26 @@ def parse_tool_call(text: str) -> dict | None:
         except json.JSONDecodeError:
             args = {}
     return {"name": obj["name"], "arguments": args if isinstance(args, dict) else {}}
+
+
+def parse_tool_calls(text: str) -> list[dict]:
+    """Pull ALL tool calls out of model output — needed for parallel calls.
+
+    Finds every ``<tool_call>{...}</tool_call>`` block; if none are present, falls
+    back to a single bare JSON object. Returns a list of ``{"name", "arguments"}``
+    (empty if nothing parses).
+    """
+    raws = _TOOL_CALL_RE.findall(text)
+    if not raws:
+        m = _BARE_JSON_RE.search(text)
+        raws = [m.group(0)] if m else []
+    return [c for c in (_parse_one(r) for r in raws) if c]
+
+
+def parse_tool_call(text: str) -> dict | None:
+    """The first tool call, for single-call evaluators. See ``parse_tool_calls``."""
+    calls = parse_tool_calls(text)
+    return calls[0] if calls else None
 
 
 def xlam_tools_to_openai(tools: list[dict]) -> list[dict]:

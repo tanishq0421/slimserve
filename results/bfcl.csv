@@ -1,0 +1,3 @@
+model,simple_tool,simple_arg,multiple_tool,multiple_arg,parallel_tool,parallel_arg,overall_tool,overall_arg
+base_1p5b,0.995,0.930,0.985,0.860,0.910,0.830,0.963,0.873
+gold_1p5b,0.990,0.920,0.990,0.880,0.890,0.830,0.957,0.877

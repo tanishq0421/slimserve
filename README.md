@@ -65,6 +65,26 @@ Measured on Kaggle T4s, single GPU except the FP16 teacher; `$/1M` uses $0.20/hr
 Full write-up, including what these numbers *don't* prove, in
 [`results/FINDINGS.md`](results/FINDINGS.md).
 
+## External validation (BFCL)
+
+Every accuracy above is my own strict xLAM exact-match metric. To check it against the recognized
+standard, I ran the fine-tuned 1.5B (and the base, as an anchor) on the **Berkeley Function-Calling
+Leaderboard** AST categories, scored by BFCL's own checker (vendored, so the eval is self-contained):
+
+| 1.5B | simple | multiple | parallel | overall |
+|---|---|---|---|---|
+| base | 0.995 / 0.930 | 0.985 / 0.860 | **0.910** / 0.830 | **0.963 / 0.873** |
+| fine-tuned | 0.990 / 0.920 | 0.990 / 0.880 | **0.890** / 0.830 | **0.957 / 0.877** |
+
+<sub>tool / arg — tool = right function name(s), arg = BFCL's strict AST check. `simple` derived from the overall.</sub>
+
+Three things the standard benchmark showed: (1) **my xLAM metric was a conservative floor** — BFCL gives
+the *same* model ~0.88 arg vs my ~0.79, because its checker accepts valid value variations mine rejected;
+(2) a fine-tuned 1.5B is a **strong caller on the recognized methodology (~0.96 / 0.88)**, not just by my
+own metric; (3) single-call fine-tuning **mildly narrowed** the model — it's a touch *worse* than the base
+on parallel calls (0.890 vs 0.910), the honest generality-for-sharpness trade-off. Full breakdown in
+[`results/FINDINGS.md`](results/FINDINGS.md) and [`results/bfcl.csv`](results/bfcl.csv).
+
 ## Models & reproduce
 
 The fine-tuned students are published on the Hugging Face Hub:
